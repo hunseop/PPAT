@@ -46,6 +46,37 @@ class ProxyServer(db.Model):
     # 업데이트 관련 필드 추가
     last_update = db.Column(db.DateTime, default=None)
     update_status = db.Column(db.String(20), default='pending')  # pending, updating, success, error
-    
+
     def __repr__(self):
-        return f'<ProxyServer {self.name}>' 
+        return f'<ProxyServer {self.name}>'
+
+
+class ResourceStat(db.Model):
+    """프록시 리소스 수집 데이터"""
+    __tablename__ = 'resource_stats'
+
+    id = db.Column(db.Integer, primary_key=True)
+    proxy_id = db.Column(db.Integer, db.ForeignKey('proxy_servers.id'), nullable=False)
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+    cpu = db.Column(db.Float)
+    memory = db.Column(db.Float)
+    unique_clients = db.Column(db.Integer)
+    cc = db.Column(db.Integer)
+    cs = db.Column(db.Integer)
+    http = db.Column(db.Integer)
+    https = db.Column(db.Integer)
+    ftp = db.Column(db.Integer)
+
+    proxy = db.relationship('ProxyServer')
+
+
+class SessionInfo(db.Model):
+    """세션 모니터링 데이터"""
+    __tablename__ = 'session_info'
+
+    id = db.Column(db.Integer, primary_key=True)
+    proxy_id = db.Column(db.Integer, db.ForeignKey('proxy_servers.id'), nullable=False)
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+    data = db.Column(db.JSON)
+
+    proxy = db.relationship('ProxyServer')
