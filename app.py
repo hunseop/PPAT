@@ -37,6 +37,15 @@ def create_app():
     # 모델 임포트 (테이블 생성을 위해)
     from models import ProxyGroup, ProxyServer, ResourceStat, SessionInfo
     
+    # Socket.IO 이벤트 핸들러
+    @socketio.on('connect')
+    def handle_connect():
+        print('🔌 클라이언트 연결됨')
+    
+    @socketio.on('disconnect')
+    def handle_disconnect():
+        print('🔌 클라이언트 연결 해제됨')
+    
     # 데이터베이스 테이블 생성
     with app.app_context():
         db.create_all()
@@ -45,4 +54,6 @@ def create_app():
 
 if __name__ == '__main__':
     app = create_app()
-    socketio.run(app, debug=True, host='0.0.0.0', port=5000)
+    print(f"🚀 서버 시작: http://127.0.0.1:5007")
+    print(f"🌐 외부 접속: http://0.0.0.0:5007 (실제 접속은 http://127.0.0.1:5007 또는 http://localhost:5007)")
+    socketio.run(app, debug=True, host='0.0.0.0', port=5007)

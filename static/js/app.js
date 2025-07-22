@@ -122,7 +122,9 @@ createApp({
         
         // Socket.IO 초기화
         initSocket() {
-            this.socket = io();
+            this.socket = io({
+                transports: ['websocket', 'polling']
+            });
             
             this.socket.on('resource_update', (data) => {
                 // 실시간 리소스 업데이트
