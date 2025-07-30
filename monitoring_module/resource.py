@@ -1,5 +1,5 @@
 from pysnmp.hlapi import *
-from .clients.ssh import SSHClient
+from .client.ssh import SSHClient
 from .config import Config
 from .utils import get_current_timestamp, validate_resource_data, logger, split_line
 

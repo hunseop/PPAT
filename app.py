@@ -16,9 +16,11 @@ def create_app():
     from models import db
     db.init_app(app)
     
-    # API 블루프린트 등록
+    # 블루프린트 등록
     from api.proxy import proxy_bp
+    from api.monitoring import monitoring_bp
     app.register_blueprint(proxy_bp, url_prefix='/api')
+    app.register_blueprint(monitoring_bp, url_prefix='/api/monitoring')
     
     # 메인 라우트
     @app.route('/')

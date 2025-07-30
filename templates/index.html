@@ -16,10 +16,10 @@
                     PPAT
                 </a>
                 <div class="navbar-nav ms-auto">
-                    <a class="nav-link active px-3" href="#" onclick="showTab('management')">
+                    <a class="nav-link px-3" href="#" onclick="showTab('management')">
                         관리
                     </a>
-                    <a class="nav-link px-3" href="#" onclick="alert('개발 예정')">
+                    <a class="nav-link px-3" href="#" onclick="showTab('resources')">
                         자원사용률
                     </a>
                     <a class="nav-link px-3" href="#" onclick="alert('개발 예정')">
@@ -112,6 +112,90 @@
                                     <button class="btn btn-primary btn-sm" onclick="showModal()">
                                         프록시 추가
                                     </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 자원사용률 탭 -->
+            <div id="resourcesTab" style="display: none;">
+                <!-- 요약 통계 -->
+                <div class="row mb-4">
+                    <div class="col-md-3">
+                        <div class="card text-center shadow-sm">
+                            <div class="card-body">
+                                <h5 class="card-title text-primary" id="totalProxiesCount">0</h5>
+                                <p class="card-text small text-muted">전체 프록시</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card text-center shadow-sm">
+                            <div class="card-body">
+                                <h5 class="card-title text-success" id="activeProxiesCount">0</h5>
+                                <p class="card-text small text-muted">온라인</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card text-center shadow-sm">
+                            <div class="card-body">
+                                <h5 class="card-title text-secondary" id="offlineProxiesCount">0</h5>
+                                <p class="card-text small text-muted">오프라인</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card text-center shadow-sm">
+                            <div class="card-body">
+                                <button class="btn btn-sm btn-outline-primary" onclick="refreshResources()">
+                                    새로고침
+                                </button>
+                                <p class="card-text small text-muted mt-2">마지막 업데이트: <span id="lastUpdate">-</span></p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 리소스 모니터링 테이블 -->
+                <div class="row">
+                    <div class="col-12">
+                        <div class="card shadow-sm">
+                            <div class="card-header bg-white">
+                                <h5 class="mb-0 text-muted">실시간 자원사용률</h5>
+                            </div>
+                            <div class="card-body p-0">
+                                <div class="table-responsive">
+                                    <table class="table table-hover mb-0">
+                                        <thead class="table-light">
+                                            <tr>
+                                                <th class="border-0 ps-3">프록시</th>
+                                                <th class="border-0">그룹</th>
+                                                <th class="border-0">역할</th>
+                                                <th class="border-0">CPU</th>
+                                                <th class="border-0">메모리</th>
+                                                <th class="border-0">세션수</th>
+                                                <th class="border-0">연결수</th>
+                                                <th class="border-0">업데이트</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="resourcesTableBody">
+                                            <!-- 리소스 데이터가 여기에 동적으로 로드됩니다 -->
+                                        </tbody>
+                                    </table>
+                                </div>
+
+                                <!-- 빈 상태 메시지 -->
+                                <div id="resourcesEmptyMessage" class="text-center py-5" style="display: none;">
+                                    <div class="text-muted mb-3">
+                                        <svg width="48" height="48" viewBox="0 0 24 24" fill="currentColor">
+                                            <path d="M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M7,13H17V11H7"/>
+                                        </svg>
+                                    </div>
+                                    <h6 class="text-muted">활성화된 프록시가 없습니다</h6>
+                                    <p class="text-muted small">프록시를 활성화하여 모니터링을 시작하세요.</p>
                                 </div>
                             </div>
                         </div>

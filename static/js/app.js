@@ -1,11 +1,13 @@
 // 프록시 모니터링 시스템 - 관리 페이지 (PPAT)
 
 let proxies = [];
-let groups = [];
+let groups = []; // New: Array to store proxy groups
+let resources = []; // New: Array to store resource data
 let editingProxy = null;
-let editingGroup = null;
+let editingGroup = null; // New: Variable for editing group
 let modal = null;
-let groupModal = null;
+let groupModal = null; // New: Bootstrap modal instance for groups
+let currentTab = 'management'; // 현재 활성 탭
 
 // DOM 로드 완료 후 초기화
 document.addEventListener('DOMContentLoaded', function() {
@@ -13,23 +15,50 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Bootstrap 모달 초기화
     modal = new bootstrap.Modal(document.getElementById('proxyModal'));
-    groupModal = new bootstrap.Modal(document.getElementById('groupModal'));
+    groupModal = new bootstrap.Modal(document.getElementById('groupModal')); // New: Initialize group modal
     
     // 초기 데이터 로드
-    loadGroups();
+    loadGroups(); // New: Load groups on startup
     loadProxies();
     
     // 주기적으로 상태 업데이트 (30초마다)
     setInterval(() => {
-        loadProxies();
-        loadGroups();
+        if (currentTab === 'management') {
+            loadProxies();
+            loadGroups();
+        } else if (currentTab === 'resources') {
+            loadResourcesData();
+        }
     }, 30000);
 });
 
-// 탭 표시 (향후 확장용)
+// 탭 전환 함수
 function showTab(tabName) {
-    console.log('Tab:', tabName);
-    // PRD 기준으로 향후 자원사용률, 세션브라우저, 정책조회 탭 추가 예정
+    console.log(`탭 전환: ${tabName}`);
+    
+    // 모든 탭 숨기기
+    document.getElementById('managementTab').style.display = 'none';
+    document.getElementById('resourcesTab').style.display = 'none';
+    
+    // 네비게이션 활성 클래스 제거
+    document.querySelectorAll('.nav-link').forEach(link => {
+        link.classList.remove('active');
+    });
+    
+    // 선택된 탭 표시
+    if (tabName === 'management') {
+        document.getElementById('managementTab').style.display = 'block';
+        document.querySelector('a[onclick="showTab(\'management\')"]').classList.add('active');
+        loadGroups();
+        loadProxies();
+    } else if (tabName === 'resources') {
+        document.getElementById('resourcesTab').style.display = 'block';
+        document.querySelector('a[onclick="showTab(\'resources\')"]').classList.add('active');
+        loadResourcesData();
+        loadMonitoringSummary();
+    }
+    
+    currentTab = tabName;
 }
 
 // ==================== 프록시 그룹 관리 ====================
@@ -535,6 +564,150 @@ async function testConnection(proxyId) {
         testBtn.innerHTML = originalHtml;
         testBtn.disabled = false;
     }
+}
+
+// ==================== 자원사용률 관리 ====================
+
+// 자원사용률 데이터 로드
+async function loadResourcesData() {
+    console.log('자원사용률 데이터 로딩 시작...');
+    try {
+        const response = await fetch('/api/monitoring/resources');
+        console.log('Resources response status:', response.status);
+        
+        if (response.ok) {
+            const result = await response.json();
+            resources = result.data || [];
+            console.log('로드된 자원 수:', resources.length);
+            updateResourcesTable();
+            updateLastUpdate();
+        } else {
+            const errorText = await response.text();
+            console.error('자원 API 오류:', response.status, errorText);
+            showNotification(`자원 목록을 불러오는데 실패했습니다. (${response.status})`, 'danger');
+        }
+    } catch (error) {
+        console.error('자원 목록 로딩 오류:', error);
+        showNotification('자원 네트워크 오류: ' + error.message, 'danger');
+    }
+}
+
+// 모니터링 요약 통계 로드
+async function loadMonitoringSummary() {
+    console.log('모니터링 요약 로딩 시작...');
+    try {
+        const response = await fetch('/api/monitoring/summary');
+        
+        if (response.ok) {
+            const summary = await response.json();
+            updateSummaryCards(summary);
+        } else {
+            console.error('요약 API 오류:', response.status);
+        }
+    } catch (error) {
+        console.error('요약 로딩 오류:', error);
+    }
+}
+
+// 요약 카드 업데이트
+function updateSummaryCards(summary) {
+    document.getElementById('totalProxiesCount').textContent = summary.total_proxies || 0;
+    document.getElementById('activeProxiesCount').textContent = summary.active_proxies || 0;
+    document.getElementById('offlineProxiesCount').textContent = summary.offline_proxies || 0;
+}
+
+// 자원사용률 테이블 업데이트
+function updateResourcesTable() {
+    console.log('자원사용률 테이블 업데이트 중...');
+    const tbody = document.getElementById('resourcesTableBody');
+    const emptyMessage = document.getElementById('resourcesEmptyMessage');
+    
+    if (resources.length === 0) {
+        tbody.innerHTML = '';
+        emptyMessage.style.display = 'block';
+        return;
+    }
+    
+    emptyMessage.style.display = 'none';
+    
+    tbody.innerHTML = resources.map(resource => {
+        const data = resource.resource_data;
+        
+        // CPU와 메모리 사용률 표시
+        const cpuValue = data.cpu === 'error' ? 'N/A' : `${data.cpu}%`;
+        const memoryValue = data.memory === 'error' ? 'N/A' : `${data.memory}%`;
+        
+        // CPU와 메모리 상태에 따른 색상
+        const cpuClass = getCpuClass(data.cpu);
+        const memoryClass = getMemoryClass(data.memory);
+        
+        return `
+            <tr>
+                <td class="ps-3">
+                    <strong>${resource.proxy_name}</strong>
+                    <br><small class="text-muted">${resource.host}</small>
+                </td>
+                <td>
+                    <span class="badge bg-light text-dark">${resource.group_name || '미지정'}</span>
+                </td>
+                <td>
+                    ${resource.is_main ? 
+                        '<span class="badge bg-warning text-dark">메인</span>' : 
+                        '<span class="badge bg-secondary">클러스터</span>'
+                    }
+                </td>
+                <td>
+                    <span class="badge ${cpuClass}">${cpuValue}</span>
+                </td>
+                <td>
+                    <span class="badge ${memoryClass}">${memoryValue}</span>
+                </td>
+                <td>
+                    <span class="text-muted">${data.uc === 'error' ? 'N/A' : data.uc}</span>
+                </td>
+                <td>
+                    <span class="text-muted">${data.cc === 'error' ? 'N/A' : data.cc}</span>
+                </td>
+                <td>
+                    <small class="text-muted">${data.time || 'N/A'}</small>
+                </td>
+            </tr>
+        `;
+    }).join('');
+    console.log('자원사용률 테이블 업데이트 완료');
+}
+
+// CPU 사용률에 따른 CSS 클래스 반환
+function getCpuClass(cpu) {
+    if (cpu === 'error') return 'bg-secondary';
+    const value = parseInt(cpu);
+    if (value >= 80) return 'bg-danger';
+    if (value >= 60) return 'bg-warning';
+    return 'bg-success';
+}
+
+// 메모리 사용률에 따른 CSS 클래스 반환
+function getMemoryClass(memory) {
+    if (memory === 'error') return 'bg-secondary';
+    const value = parseInt(memory);
+    if (value >= 80) return 'bg-danger';
+    if (value >= 60) return 'bg-warning';
+    return 'bg-success';
+}
+
+// 마지막 업데이트 시간 갱신
+function updateLastUpdate() {
+    const now = new Date();
+    const timeString = now.toLocaleTimeString('ko-KR');
+    document.getElementById('lastUpdate').textContent = timeString;
+}
+
+// 자원사용률 새로고침
+async function refreshResources() {
+    console.log('자원사용률 수동 새로고침');
+    await loadResourcesData();
+    await loadMonitoringSummary();
+    showNotification('자원사용률이 업데이트되었습니다.', 'info');
 }
 
 // ==================== 공통 유틸리티 ====================
