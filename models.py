@@ -74,3 +74,45 @@ class ProxyServer(db.Model):
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None
         }
+
+class MonitoringConfig(db.Model):
+    """모니터링 설정 모델"""
+    __tablename__ = 'monitoring_configs'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False, unique=True)
+    description = db.Column(db.Text)
+    
+    # SNMP 설정
+    snmp_oids = db.Column(db.JSON)  # JSON 형태로 OID 저장
+    
+    # 세션 명령어
+    session_cmd = db.Column(db.Text)
+    
+    # 임계값 설정
+    cpu_threshold = db.Column(db.Integer, default=80)
+    memory_threshold = db.Column(db.Integer, default=80)
+    
+    # 모니터링 주기 설정
+    default_interval = db.Column(db.Integer, default=30)  # 초
+    
+    # 활성화 여부
+    is_active = db.Column(db.Boolean, default=True)
+    
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'name': self.name,
+            'description': self.description,
+            'snmp_oids': self.snmp_oids,
+            'session_cmd': self.session_cmd,
+            'cpu_threshold': self.cpu_threshold,
+            'memory_threshold': self.memory_threshold,
+            'default_interval': self.default_interval,
+            'is_active': self.is_active,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None
+        }

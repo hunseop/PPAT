@@ -150,10 +150,55 @@
                     <div class="col-md-3">
                         <div class="card text-center shadow-sm">
                             <div class="card-body">
-                                <button class="btn btn-sm btn-outline-primary" onclick="refreshResources()">
-                                    새로고침
-                                </button>
-                                <p class="card-text small text-muted mt-2">마지막 업데이트: <span id="lastUpdate">-</span></p>
+                                <div class="mb-2">
+                                    <span class="badge" id="monitoringStatus">정지됨</span>
+                                </div>
+                                <div class="btn-group-vertical w-100">
+                                    <button class="btn btn-sm btn-success mb-1" id="startMonitoringBtn" onclick="startMonitoring()">
+                                        시작
+                                    </button>
+                                    <button class="btn btn-sm btn-danger mb-2" id="stopMonitoringBtn" onclick="stopMonitoring()" disabled>
+                                        중지
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-primary" onclick="refreshResources()">
+                                        수동 새로고침
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 모니터링 설정 -->
+                <div class="row mb-4">
+                    <div class="col-12">
+                        <div class="card shadow-sm">
+                            <div class="card-header bg-white">
+                                <h6 class="mb-0 text-muted">모니터링 설정</h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="row align-items-center">
+                                    <div class="col-md-3">
+                                        <label for="monitoringInterval" class="form-label small">갱신 주기 (초)</label>
+                                        <select class="form-select form-select-sm" id="monitoringInterval" onchange="updateMonitoringInterval()">
+                                            <option value="10">10초</option>
+                                            <option value="30" selected>30초</option>
+                                            <option value="60">1분</option>
+                                            <option value="300">5분</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <small class="text-muted">
+                                            마지막 업데이트: <span id="lastUpdate">-</span> | 
+                                            다음 업데이트: <span id="nextUpdate">-</span>
+                                        </small>
+                                    </div>
+                                    <div class="col-md-3 text-end">
+                                        <small class="text-muted">
+                                            수집된 항목: <span class="badge bg-light text-dark" id="collectedItemsCount">8</span>
+                                        </small>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -177,7 +222,7 @@
                                                 <th class="border-0">CPU</th>
                                                 <th class="border-0">메모리</th>
                                                 <th class="border-0">세션수</th>
-                                                <th class="border-0">연결수</th>
+                                                <th class="border-0">상태</th>
                                                 <th class="border-0">업데이트</th>
                                             </tr>
                                         </thead>

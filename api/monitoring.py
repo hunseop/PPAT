@@ -27,7 +27,9 @@ def get_resources():
                 monitor = ResourceMonitor(
                     host=proxy.host,
                     username=proxy.username,
-                    password=proxy.password
+                    password=proxy.password,
+                    snmp_port=proxy.snmp_port,
+                    snmp_community=proxy.snmp_community
                 )
                 
                 # 리소스 데이터 수집
@@ -93,7 +95,9 @@ def get_proxy_resources(proxy_id):
         monitor = ResourceMonitor(
             host=proxy.host,
             username=proxy.username,
-            password=proxy.password
+            password=proxy.password,
+            snmp_port=proxy.snmp_port,
+            snmp_community=proxy.snmp_community
         )
         
         # 리소스 데이터 수집

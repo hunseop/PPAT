@@ -9,6 +9,12 @@ let modal = null;
 let groupModal = null; // New: Bootstrap modal instance for groups
 let currentTab = 'management'; // 현재 활성 탭
 
+// 모니터링 관련 변수
+let monitoringInterval = null;
+let monitoringIntervalTime = 30; // 기본 30초
+let isMonitoringActive = false;
+let nextUpdateTimeout = null;
+
 // DOM 로드 완료 후 초기화
 document.addEventListener('DOMContentLoaded', function() {
     console.log('PPAT 시스템 초기화 중...');
@@ -21,13 +27,11 @@ document.addEventListener('DOMContentLoaded', function() {
     loadGroups(); // New: Load groups on startup
     loadProxies();
     
-    // 주기적으로 상태 업데이트 (30초마다)
+    // 관리 탭은 주기적 업데이트 (30초마다)
     setInterval(() => {
         if (currentTab === 'management') {
             loadProxies();
             loadGroups();
-        } else if (currentTab === 'resources') {
-            loadResourcesData();
         }
     }, 30000);
 });
@@ -641,6 +645,11 @@ function updateResourcesTable() {
         const cpuClass = getCpuClass(data.cpu);
         const memoryClass = getMemoryClass(data.memory);
         
+        // 연결 상태 확인
+        const isConnected = data.cpu !== 'error' && data.memory !== 'error';
+        const statusClass = isConnected ? 'bg-success' : 'bg-danger';
+        const statusText = isConnected ? '연결됨' : '연결 실패';
+        
         return `
             <tr>
                 <td class="ps-3">
@@ -663,10 +672,10 @@ function updateResourcesTable() {
                     <span class="badge ${memoryClass}">${memoryValue}</span>
                 </td>
                 <td>
-                    <span class="text-muted">${data.uc === 'error' ? 'N/A' : data.uc}</span>
+                    <span class="text-muted">${data.uc === 'error' ? 'N/A' : data.uc + '개'}</span>
                 </td>
                 <td>
-                    <span class="text-muted">${data.cc === 'error' ? 'N/A' : data.cc}</span>
+                    <span class="badge ${statusClass}">${statusText}</span>
                 </td>
                 <td>
                     <small class="text-muted">${data.time || 'N/A'}</small>
@@ -674,6 +683,9 @@ function updateResourcesTable() {
             </tr>
         `;
     }).join('');
+    
+    // 수집된 항목 수 업데이트
+    updateCollectedItemsCount();
     console.log('자원사용률 테이블 업데이트 완료');
 }
 
@@ -708,6 +720,123 @@ async function refreshResources() {
     await loadResourcesData();
     await loadMonitoringSummary();
     showNotification('자원사용률이 업데이트되었습니다.', 'info');
+}
+
+// ==================== 모니터링 컨트롤 ====================
+
+// 모니터링 시작
+function startMonitoring() {
+    if (isMonitoringActive) return;
+    
+    console.log(`모니터링 시작 - 주기: ${monitoringIntervalTime}초`);
+    isMonitoringActive = true;
+    
+    // UI 업데이트
+    updateMonitoringUI();
+    
+    // 즉시 첫 번째 데이터 로드
+    loadResourcesData();
+    loadMonitoringSummary();
+    
+    // 주기적 업데이트 시작
+    monitoringInterval = setInterval(() => {
+        loadResourcesData();
+        loadMonitoringSummary();
+    }, monitoringIntervalTime * 1000);
+    
+    // 다음 업데이트 시간 표시 시작
+    updateNextUpdateTime();
+    
+    showNotification('모니터링이 시작되었습니다.', 'success');
+}
+
+// 모니터링 중지
+function stopMonitoring() {
+    if (!isMonitoringActive) return;
+    
+    console.log('모니터링 중지');
+    isMonitoringActive = false;
+    
+    // 인터벌 정리
+    if (monitoringInterval) {
+        clearInterval(monitoringInterval);
+        monitoringInterval = null;
+    }
+    
+    if (nextUpdateTimeout) {
+        clearTimeout(nextUpdateTimeout);
+        nextUpdateTimeout = null;
+    }
+    
+    // UI 업데이트
+    updateMonitoringUI();
+    document.getElementById('nextUpdate').textContent = '-';
+    
+    showNotification('모니터링이 중지되었습니다.', 'warning');
+}
+
+// 모니터링 주기 업데이트
+function updateMonitoringInterval() {
+    const newInterval = parseInt(document.getElementById('monitoringInterval').value);
+    monitoringIntervalTime = newInterval;
+    
+    console.log(`모니터링 주기 변경: ${monitoringIntervalTime}초`);
+    
+    // 모니터링이 활성 상태라면 재시작
+    if (isMonitoringActive) {
+        stopMonitoring();
+        setTimeout(() => startMonitoring(), 100);
+    }
+    
+    showNotification(`모니터링 주기가 ${monitoringIntervalTime}초로 변경되었습니다.`, 'info');
+}
+
+// 모니터링 UI 업데이트
+function updateMonitoringUI() {
+    const status = document.getElementById('monitoringStatus');
+    const startBtn = document.getElementById('startMonitoringBtn');
+    const stopBtn = document.getElementById('stopMonitoringBtn');
+    
+    if (isMonitoringActive) {
+        status.textContent = '실행중';
+        status.className = 'badge bg-success';
+        startBtn.disabled = true;
+        stopBtn.disabled = false;
+    } else {
+        status.textContent = '정지됨';
+        status.className = 'badge bg-secondary';
+        startBtn.disabled = false;
+        stopBtn.disabled = true;
+    }
+}
+
+// 다음 업데이트 시간 표시
+function updateNextUpdateTime() {
+    if (!isMonitoringActive) return;
+    
+    let countdown = monitoringIntervalTime;
+    
+    const updateCountdown = () => {
+        if (!isMonitoringActive) return;
+        
+        document.getElementById('nextUpdate').textContent = `${countdown}초 후`;
+        countdown--;
+        
+        if (countdown >= 0) {
+            nextUpdateTimeout = setTimeout(updateCountdown, 1000);
+        } else {
+            countdown = monitoringIntervalTime;
+            nextUpdateTimeout = setTimeout(updateCountdown, 1000);
+        }
+    };
+    
+    updateCountdown();
+}
+
+// 수집된 항목 수 업데이트
+function updateCollectedItemsCount() {
+    const count = resources.length;
+    document.getElementById('collectedItemsCount').textContent = count;
 }
 
 // ==================== 공통 유틸리티 ====================
