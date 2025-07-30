@@ -196,7 +196,21 @@
                             </div>
                         </div>
                         <div class="row">
-                            <div class="col-md-6">
+                            <div class="col-md-4">
+                                <div class="mb-3">
+                                    <label for="proxySnmpVersion" class="form-label">SNMP 버전</label>
+                                    <select class="form-select" id="proxySnmpVersion">
+                                        <option value="v2c" selected>SNMP v2c</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="mb-3">
+                                    <label for="proxySnmpCommunity" class="form-label">커뮤니티 스트링</label>
+                                    <input type="text" class="form-control" id="proxySnmpCommunity" value="public" placeholder="예: public">
+                                </div>
+                            </div>
+                            <div class="col-md-4">
                                 <div class="mb-3">
                                     <label for="proxyGroup" class="form-label">그룹</label>
                                     <select class="form-select" id="proxyGroup">
@@ -205,11 +219,16 @@
                                     </select>
                                 </div>
                             </div>
+                        </div>
+                        <div class="row">
                             <div class="col-md-6">
                                 <div class="mb-3">
                                     <label for="proxyPassword" class="form-label">비밀번호</label>
                                     <input type="password" class="form-control" id="proxyPassword" placeholder="SSH 비밀번호">
                                 </div>
+                            </div>
+                            <div class="col-md-6">
+                                <!-- 빈 공간 -->
                             </div>
                         </div>
                         <div class="mb-3">

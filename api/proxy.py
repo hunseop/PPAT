@@ -128,6 +128,8 @@ def create_proxy():
             host=data['host'],
             ssh_port=data.get('ssh_port', 22),
             snmp_port=data.get('snmp_port', 161),
+            snmp_version=data.get('snmp_version', 'v2c'),
+            snmp_community=data.get('snmp_community', 'public'),
             username=data.get('username', 'root'),
             password=data.get('password', '123456'),
             description=data.get('description', ''),
@@ -174,6 +176,10 @@ def update_proxy(proxy_id):
             proxy.ssh_port = data['ssh_port']
         if data.get('snmp_port'):
             proxy.snmp_port = data['snmp_port']
+        if data.get('snmp_version'):
+            proxy.snmp_version = data['snmp_version']
+        if data.get('snmp_community'):
+            proxy.snmp_community = data['snmp_community']
         if data.get('username'):
             proxy.username = data['username']
         if data.get('password'):
@@ -223,6 +229,13 @@ def test_proxy_connection(proxy_id):
     """프록시 연결 테스트"""
     try:
         result = proxy_manager.test_proxy_connection(proxy_id)
+        if result.get('success'):
+            # 연결 테스트 성공 시 프록시 상태를 온라인으로 변경
+            proxy = ProxyServer.query.get(proxy_id)
+            if proxy:
+                proxy.is_active = True
+                db.session.commit()
+                proxy_manager.add_proxy(proxy) # 프록시 매니저에 다시 추가
         return jsonify(result)
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)}), 500

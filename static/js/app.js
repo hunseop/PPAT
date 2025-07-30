@@ -363,6 +363,8 @@ function clearForm() {
     document.getElementById('proxyHost').value = '';
     document.getElementById('proxySshPort').value = '22';
     document.getElementById('proxySnmpPort').value = '161';
+    document.getElementById('proxySnmpVersion').value = 'v2c';
+    document.getElementById('proxySnmpCommunity').value = 'public';
     document.getElementById('proxyUsername').value = 'root';
     document.getElementById('proxyPassword').value = '';
     document.getElementById('proxyDescription').value = '';
@@ -396,6 +398,8 @@ async function saveProxy() {
             host: host,
             ssh_port: parseInt(document.getElementById('proxySshPort').value) || 22,
             snmp_port: parseInt(document.getElementById('proxySnmpPort').value) || 161,
+            snmp_version: document.getElementById('proxySnmpVersion').value,
+            snmp_community: document.getElementById('proxySnmpCommunity').value,
             username: document.getElementById('proxyUsername').value || 'root',
             password: document.getElementById('proxyPassword').value || '123456',
             description: document.getElementById('proxyDescription').value,
@@ -463,6 +467,8 @@ function editProxy(proxyId) {
     document.getElementById('proxyHost').value = editingProxy.host;
     document.getElementById('proxySshPort').value = editingProxy.ssh_port;
     document.getElementById('proxySnmpPort').value = editingProxy.snmp_port || 161;
+    document.getElementById('proxySnmpVersion').value = editingProxy.snmp_version || 'v2c';
+    document.getElementById('proxySnmpCommunity').value = editingProxy.snmp_community || 'public';
     document.getElementById('proxyUsername').value = editingProxy.username;
     document.getElementById('proxyPassword').value = ''; // 보안상 비워둠
     document.getElementById('proxyDescription').value = editingProxy.description || '';
@@ -503,12 +509,12 @@ async function deleteProxy(proxyId) {
 // 연결 테스트 (PRD 기준: SSH/SNMP 연결 확인)
 async function testConnection(proxyId) {
     const testBtn = document.getElementById(`testBtn-${proxyId}`);
-    const originalHTML = testBtn.innerHTML;
-    
-    testBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
-    testBtn.disabled = true;
+    const originalHtml = testBtn.innerHTML;
     
     try {
+        testBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+        testBtn.disabled = true;
+        
         const response = await fetch(`/api/proxies/${proxyId}/test`, {
             method: 'POST'
         });
@@ -516,19 +522,17 @@ async function testConnection(proxyId) {
         const result = await response.json();
         
         if (result.success) {
-            showNotification('연결 테스트 성공!', 'success');
+            showNotification(`연결 테스트 성공: ${result.message}`, 'success');
+            // 연결 성공 시 프록시 목록 새로고침하여 상태 업데이트 반영
+            await loadProxies();
         } else {
-            showNotification('연결 테스트 실패: ' + result.message, 'warning');
+            showNotification(`연결 테스트 실패: ${result.message}`, 'danger');
         }
-        
-        // 상태 업데이트를 위해 목록 다시 로드
-        await loadProxies();
-        
     } catch (error) {
         console.error('연결 테스트 오류:', error);
         showNotification('연결 테스트 중 오류가 발생했습니다.', 'danger');
     } finally {
-        testBtn.innerHTML = originalHTML;
+        testBtn.innerHTML = originalHtml;
         testBtn.disabled = false;
     }
 }

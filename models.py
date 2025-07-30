@@ -45,6 +45,8 @@ class ProxyServer(db.Model):
     host = db.Column(db.String(45), nullable=False)  # IPv4/IPv6 지원
     ssh_port = db.Column(db.Integer, default=22)
     snmp_port = db.Column(db.Integer, default=161)
+    snmp_version = db.Column(db.String(10), default='v2c')  # SNMP 버전
+    snmp_community = db.Column(db.String(100), default='public')  # 커뮤니티 스트링
     username = db.Column(db.String(50), default='root')
     password = db.Column(db.String(255))  # 암호화 저장 권장
     description = db.Column(db.Text)
@@ -61,6 +63,8 @@ class ProxyServer(db.Model):
             'host': self.host,
             'ssh_port': self.ssh_port,
             'snmp_port': self.snmp_port,
+            'snmp_version': self.snmp_version,
+            'snmp_community': self.snmp_community,
             'username': self.username,
             'description': self.description,
             'is_active': self.is_active,
