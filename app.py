@@ -1,6 +1,6 @@
 """프록시 모니터링 시스템 메인 애플리케이션"""
 
-from flask import Flask
+from flask import Flask, send_from_directory
 import os
 
 def create_app():
@@ -23,7 +23,12 @@ def create_app():
     # 메인 라우트
     @app.route('/')
     def index():
-        return app.send_static_file('index.html')
+        return send_from_directory('static', 'index.html')
+    
+    # 정적 파일 라우트
+    @app.route('/<path:filename>')
+    def static_files(filename):
+        return send_from_directory('static', filename)
     
     # 데이터베이스 테이블 생성
     with app.app_context():
@@ -35,15 +40,17 @@ def create_app():
             default_group = ProxyGroup(name='기본그룹', description='기본 프록시 그룹')
             db.session.add(default_group)
             db.session.commit()
-        
-        # 프록시 매니저 초기화
-        from proxy_module.proxy_manager import proxy_manager
-        proxy_manager.reload_proxies()
     
     return app
 
 if __name__ == '__main__':
     app = create_app()
+    
+    # 프록시 매니저 초기화 (앱 생성 후)
+    with app.app_context():
+        from proxy_module.proxy_manager import proxy_manager
+        proxy_manager.reload_proxies()
+    
     print(f"🚀 프록시 모니터링 시스템 시작")
     print(f"🌐 접속 주소: http://127.0.0.1:5007")
     app.run(debug=True, host='0.0.0.0', port=5007)

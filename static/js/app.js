@@ -6,6 +6,8 @@ let modal = null;
 
 // DOM 로드 완료 후 초기화
 document.addEventListener('DOMContentLoaded', function() {
+    console.log('DOM 로드 완료');
+    
     // Bootstrap 모달 초기화
     modal = new bootstrap.Modal(document.getElementById('proxyModal'));
     
@@ -24,23 +26,29 @@ function showTab(tabName) {
 
 // 프록시 목록 로드
 async function loadProxies() {
+    console.log('프록시 목록 로딩 시작...');
     try {
         const response = await fetch('/api/proxies');
+        console.log('Response status:', response.status);
+        
         if (response.ok) {
             proxies = await response.json();
+            console.log('로드된 프록시 수:', proxies.length);
             updateProxyTable();
         } else {
-            console.error('프록시 목록을 불러오는데 실패했습니다.');
-            showNotification('프록시 목록을 불러오는데 실패했습니다.', 'danger');
+            const errorText = await response.text();
+            console.error('API 오류:', response.status, errorText);
+            showNotification(`프록시 목록을 불러오는데 실패했습니다. (${response.status})`, 'danger');
         }
     } catch (error) {
         console.error('프록시 목록 로딩 오류:', error);
-        showNotification('네트워크 오류가 발생했습니다.', 'danger');
+        showNotification('네트워크 오류가 발생했습니다: ' + error.message, 'danger');
     }
 }
 
 // 프록시 테이블 업데이트
 function updateProxyTable() {
+    console.log('테이블 업데이트 중...');
     const tbody = document.getElementById('proxyTableBody');
     const emptyMessage = document.getElementById('emptyMessage');
     
@@ -87,10 +95,12 @@ function updateProxyTable() {
             </td>
         </tr>
     `).join('');
+    console.log('테이블 업데이트 완료');
 }
 
 // 모달 표시
 function showModal() {
+    console.log('모달 표시');
     editingProxy = null;
     document.getElementById('modalTitle').textContent = '프록시 추가';
     clearForm();
@@ -99,6 +109,7 @@ function showModal() {
 
 // 모달 닫기
 function closeModal() {
+    console.log('모달 닫기');
     modal.hide();
     editingProxy = null;
     clearForm();
@@ -117,8 +128,11 @@ function clearForm() {
 
 // 프록시 저장
 async function saveProxy() {
+    console.log('프록시 저장 시작');
     const name = document.getElementById('proxyName').value.trim();
     const host = document.getElementById('proxyHost').value.trim();
+    
+    console.log('입력값:', { name, host });
     
     if (!name || !host) {
         showNotification('이름과 IP 주소는 필수 항목입니다.', 'warning');
@@ -144,7 +158,8 @@ async function saveProxy() {
         const method = editingProxy ? 'PUT' : 'POST';
         const url = editingProxy ? `/api/proxies/${editingProxy.id}` : '/api/proxies';
         
-        console.log('Sending data:', data); // 디버깅용
+        console.log('요청 데이터:', data);
+        console.log('요청 URL:', url, 'Method:', method);
         
         const response = await fetch(url, {
             method: method,
@@ -154,7 +169,11 @@ async function saveProxy() {
             body: JSON.stringify(data)
         });
         
+        console.log('응답 상태:', response.status);
+        
         if (response.ok) {
+            const result = await response.json();
+            console.log('저장 성공:', result);
             await loadProxies();
             closeModal();
             showNotification(
@@ -162,9 +181,18 @@ async function saveProxy() {
                 'success'
             );
         } else {
-            const error = await response.json();
-            console.error('Server error:', error); // 디버깅용
-            showNotification('저장 실패: ' + (error.message || error.error || '알 수 없는 오류'), 'danger');
+            const errorText = await response.text();
+            console.error('서버 오류:', response.status, errorText);
+            
+            let errorMessage = '알 수 없는 오류';
+            try {
+                const error = JSON.parse(errorText);
+                errorMessage = error.message || error.error || errorText;
+            } catch {
+                errorMessage = errorText;
+            }
+            
+            showNotification('저장 실패: ' + errorMessage, 'danger');
         }
     } catch (error) {
         console.error('저장 오류:', error);
