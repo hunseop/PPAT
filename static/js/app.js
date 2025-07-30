@@ -1,4 +1,4 @@
-// 프록시 모니터링 시스템 - 순수 JavaScript
+// 프록시 모니터링 시스템 - 관리 페이지
 
 let proxies = [];
 let editingProxy = null;
@@ -16,36 +16,27 @@ document.addEventListener('DOMContentLoaded', function() {
     setInterval(loadProxies, 30000);
 });
 
+// 탭 표시 (향후 확장용)
+function showTab(tabName) {
+    // 현재는 관리 탭만 있음
+    console.log('Tab:', tabName);
+}
+
 // 프록시 목록 로드
 async function loadProxies() {
     try {
         const response = await fetch('/api/proxies');
         if (response.ok) {
             proxies = await response.json();
-            updateUI();
+            updateProxyTable();
         } else {
             console.error('프록시 목록을 불러오는데 실패했습니다.');
+            showNotification('프록시 목록을 불러오는데 실패했습니다.', 'danger');
         }
     } catch (error) {
         console.error('프록시 목록 로딩 오류:', error);
+        showNotification('네트워크 오류가 발생했습니다.', 'danger');
     }
-}
-
-// UI 업데이트
-function updateUI() {
-    updateStatistics();
-    updateProxyTable();
-}
-
-// 통계 업데이트
-function updateStatistics() {
-    const total = proxies.length;
-    const online = proxies.filter(p => p.is_active).length;
-    const offline = total - online;
-    
-    document.getElementById('totalProxies').textContent = total;
-    document.getElementById('onlineProxies').textContent = online;
-    document.getElementById('offlineProxies').textContent = offline;
 }
 
 // 프록시 테이블 업데이트
@@ -63,30 +54,36 @@ function updateProxyTable() {
     
     tbody.innerHTML = proxies.map(proxy => `
         <tr>
-            <td>${proxy.name}</td>
-            <td>${proxy.host}</td>
+            <td><strong>${proxy.name}</strong></td>
+            <td><code>${proxy.host}</code></td>
             <td>${proxy.ssh_port}</td>
+            <td>${proxy.username}</td>
             <td>
-                <span class="badge ${proxy.is_active ? 'bg-success' : 'bg-danger'}">
+                <span class="badge ${proxy.is_active ? 'bg-success' : 'bg-secondary'}">
+                    <i class="fas ${proxy.is_active ? 'fa-check' : 'fa-times'}"></i>
                     ${proxy.is_active ? '온라인' : '오프라인'}
                 </span>
             </td>
-            <td>${formatDate(proxy.updated_at)}</td>
+            <td><small class="text-muted">${proxy.description || '-'}</small></td>
             <td>
-                <button class="btn btn-sm btn-outline-info me-1" 
-                        onclick="testConnection(${proxy.id})" 
-                        id="testBtn-${proxy.id}">
-                    <i class="fas fa-plug"></i>
-                    연결테스트
-                </button>
-                <button class="btn btn-sm btn-outline-primary me-1" 
-                        onclick="editProxy(${proxy.id})">
-                    <i class="fas fa-edit"></i>
-                </button>
-                <button class="btn btn-sm btn-outline-danger" 
-                        onclick="deleteProxy(${proxy.id})">
-                    <i class="fas fa-trash"></i>
-                </button>
+                <div class="btn-group btn-group-sm">
+                    <button class="btn btn-outline-info" 
+                            onclick="testConnection(${proxy.id})" 
+                            id="testBtn-${proxy.id}"
+                            title="연결 테스트">
+                        <i class="fas fa-plug"></i>
+                    </button>
+                    <button class="btn btn-outline-primary" 
+                            onclick="editProxy(${proxy.id})"
+                            title="수정">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                    <button class="btn btn-outline-danger" 
+                            onclick="deleteProxy(${proxy.id})"
+                            title="삭제">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
             </td>
         </tr>
     `).join('');
@@ -124,7 +121,7 @@ async function saveProxy() {
     const host = document.getElementById('proxyHost').value.trim();
     
     if (!name || !host) {
-        showNotification('이름과 IP 주소는 필수 항목입니다.', 'danger');
+        showNotification('이름과 IP 주소는 필수 항목입니다.', 'warning');
         return;
     }
     
@@ -147,6 +144,8 @@ async function saveProxy() {
         const method = editingProxy ? 'PUT' : 'POST';
         const url = editingProxy ? `/api/proxies/${editingProxy.id}` : '/api/proxies';
         
+        console.log('Sending data:', data); // 디버깅용
+        
         const response = await fetch(url, {
             method: method,
             headers: {
@@ -158,14 +157,18 @@ async function saveProxy() {
         if (response.ok) {
             await loadProxies();
             closeModal();
-            showNotification(editingProxy ? '프록시가 수정되었습니다.' : '프록시가 추가되었습니다.', 'success');
+            showNotification(
+                editingProxy ? '프록시가 수정되었습니다.' : '프록시가 추가되었습니다.', 
+                'success'
+            );
         } else {
             const error = await response.json();
+            console.error('Server error:', error); // 디버깅용
             showNotification('저장 실패: ' + (error.message || error.error || '알 수 없는 오류'), 'danger');
         }
     } catch (error) {
         console.error('저장 오류:', error);
-        showNotification('저장 중 오류가 발생했습니다.', 'danger');
+        showNotification('저장 중 오류가 발생했습니다: ' + error.message, 'danger');
     } finally {
         saveButton.innerHTML = originalText;
         saveButton.disabled = false;
@@ -191,7 +194,10 @@ function editProxy(proxyId) {
 
 // 프록시 삭제
 async function deleteProxy(proxyId) {
-    if (!confirm('정말로 이 프록시를 삭제하시겠습니까?')) {
+    const proxy = proxies.find(p => p.id === proxyId);
+    if (!proxy) return;
+    
+    if (!confirm(`정말로 "${proxy.name}" 프록시를 삭제하시겠습니까?`)) {
         return;
     }
     
@@ -217,7 +223,7 @@ async function testConnection(proxyId) {
     const testBtn = document.getElementById(`testBtn-${proxyId}`);
     const originalHTML = testBtn.innerHTML;
     
-    testBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 테스트중...';
+    testBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
     testBtn.disabled = true;
     
     try {
@@ -229,13 +235,13 @@ async function testConnection(proxyId) {
         
         if (result.success) {
             showNotification('연결 테스트 성공!', 'success');
-            // 상태 업데이트를 위해 목록 다시 로드
-            await loadProxies();
         } else {
-            showNotification('연결 테스트 실패: ' + result.message, 'danger');
-            // 상태 업데이트를 위해 목록 다시 로드
-            await loadProxies();
+            showNotification('연결 테스트 실패: ' + result.message, 'warning');
         }
+        
+        // 상태 업데이트를 위해 목록 다시 로드
+        await loadProxies();
+        
     } catch (error) {
         console.error('연결 테스트 오류:', error);
         showNotification('연결 테스트 중 오류가 발생했습니다.', 'danger');
@@ -245,21 +251,16 @@ async function testConnection(proxyId) {
     }
 }
 
-// 날짜 포맷팅
-function formatDate(dateString) {
-    if (!dateString) return '-';
-    const date = new Date(dateString);
-    return date.toLocaleString('ko-KR');
-}
-
 // 알림 표시
 function showNotification(message, type = 'info') {
     const alertClass = type === 'success' ? 'alert-success' : 
-                      type === 'danger' ? 'alert-danger' : 'alert-info';
+                      type === 'danger' ? 'alert-danger' : 
+                      type === 'warning' ? 'alert-warning' : 'alert-info';
     
     const alertDiv = document.createElement('div');
     alertDiv.className = `alert ${alertClass} alert-dismissible fade show`;
     alertDiv.innerHTML = `
+        <i class="fas ${getIconForType(type)} me-2"></i>
         ${message}
         <button type="button" class="btn-close" onclick="this.parentElement.remove()"></button>
     `;
@@ -273,4 +274,14 @@ function showNotification(message, type = 'info') {
             alertDiv.remove();
         }
     }, 5000);
+}
+
+// 알림 타입별 아이콘
+function getIconForType(type) {
+    switch(type) {
+        case 'success': return 'fa-check-circle';
+        case 'danger': return 'fa-exclamation-circle';
+        case 'warning': return 'fa-exclamation-triangle';
+        default: return 'fa-info-circle';
+    }
 }

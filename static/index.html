@@ -10,93 +10,67 @@
 <body>
     <div id="app">
         <!-- 네비게이션 -->
-        <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
             <div class="container">
                 <a class="navbar-brand" href="#">
                     <i class="fas fa-server me-2"></i>
                     프록시 모니터링 시스템
                 </a>
+                <div class="navbar-nav ms-auto">
+                    <a class="nav-link active" href="#" onclick="showTab('management')">
+                        <i class="fas fa-cog me-1"></i>관리
+                    </a>
+                    <a class="nav-link text-muted" href="#" onclick="alert('개발 예정')">
+                        <i class="fas fa-chart-bar me-1"></i>자원사용률
+                    </a>
+                    <a class="nav-link text-muted" href="#" onclick="alert('개발 예정')">
+                        <i class="fas fa-globe me-1"></i>세션브라우저
+                    </a>
+                    <a class="nav-link text-muted" href="#" onclick="alert('개발 예정')">
+                        <i class="fas fa-shield-alt me-1"></i>정책조회
+                    </a>
+                </div>
             </div>
         </nav>
 
         <!-- 메인 컨텐츠 -->
         <div class="container mt-4">
-            <!-- 통계 카드 -->
-            <div class="row mb-4">
-                <div class="col-md-4">
-                    <div class="card text-white bg-primary">
-                        <div class="card-body">
-                            <div class="d-flex justify-content-between">
-                                <div>
-                                    <h5 class="card-title">총 프록시</h5>
-                                    <h2 id="totalProxies">0</h2>
-                                </div>
-                                <div class="align-self-center">
-                                    <i class="fas fa-server fa-2x"></i>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="card text-white bg-success">
-                        <div class="card-body">
-                            <div class="d-flex justify-content-between">
-                                <div>
-                                    <h5 class="card-title">온라인</h5>
-                                    <h2 id="onlineProxies">0</h2>
-                                </div>
-                                <div class="align-self-center">
-                                    <i class="fas fa-check-circle fa-2x"></i>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="card text-white bg-warning">
-                        <div class="card-body">
-                            <div class="d-flex justify-content-between">
-                                <div>
-                                    <h5 class="card-title">오프라인</h5>
-                                    <h2 id="offlineProxies">0</h2>
-                                </div>
-                                <div class="align-self-center">
-                                    <i class="fas fa-exclamation-triangle fa-2x"></i>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- 프록시 관리 -->
-            <div class="card">
-                <div class="card-header d-flex justify-content-between align-items-center">
-                    <h5><i class="fas fa-list me-2"></i>프록시 서버 목록</h5>
+            <!-- 관리 페이지 -->
+            <div id="managementTab">
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <h3>프록시 서버 관리</h3>
                     <button class="btn btn-primary" onclick="showModal()">
                         <i class="fas fa-plus me-1"></i>프록시 추가
                     </button>
                 </div>
-                <div class="card-body">
-                    <div class="table-responsive">
-                        <table class="table table-striped">
-                            <thead>
-                                <tr>
-                                    <th>이름</th>
-                                    <th>IP 주소</th>
-                                    <th>포트</th>
-                                    <th>상태</th>
-                                    <th>마지막 체크</th>
-                                    <th>작업</th>
-                                </tr>
-                            </thead>
-                            <tbody id="proxyTableBody">
-                                <!-- 동적 생성 -->
-                            </tbody>
-                        </table>
-                        <div id="emptyMessage" class="text-center py-4 text-muted" style="display: none;">
-                            등록된 프록시 서버가 없습니다. 새 프록시를 추가해보세요.
+
+                <!-- 프록시 목록 테이블 -->
+                <div class="card">
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>이름</th>
+                                        <th>IP 주소</th>
+                                        <th>포트</th>
+                                        <th>사용자</th>
+                                        <th>상태</th>
+                                        <th>설명</th>
+                                        <th width="150">작업</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="proxyTableBody">
+                                    <!-- 동적 생성 -->
+                                </tbody>
+                            </table>
+                            <div id="emptyMessage" class="text-center py-4 text-muted" style="display: none;">
+                                <i class="fas fa-server fa-3x mb-3 text-muted"></i>
+                                <p>등록된 프록시 서버가 없습니다.</p>
+                                <button class="btn btn-outline-primary" onclick="showModal()">
+                                    첫 번째 프록시 추가하기
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -116,36 +90,42 @@
                             <div class="mb-3">
                                 <label class="form-label">이름 <span class="text-danger">*</span></label>
                                 <input type="text" class="form-control" id="proxyName" required 
-                                       placeholder="예: Proxy Server 1">
+                                       placeholder="예: Main Proxy Server">
                             </div>
                             <div class="mb-3">
                                 <label class="form-label">IP 주소 <span class="text-danger">*</span></label>
                                 <input type="text" class="form-control" id="proxyHost" required 
                                        placeholder="예: 192.168.1.100">
                             </div>
-                            <div class="mb-3">
-                                <label class="form-label">SSH 포트</label>
-                                <input type="number" class="form-control" id="proxySshPort" value="22" 
-                                       placeholder="22">
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label">사용자명</label>
-                                <input type="text" class="form-control" id="proxyUsername" value="root" 
-                                       placeholder="root">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label class="form-label">SSH 포트</label>
+                                        <input type="number" class="form-control" id="proxySshPort" value="22">
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label class="form-label">사용자명</label>
+                                        <input type="text" class="form-control" id="proxyUsername" value="root">
+                                    </div>
+                                </div>
                             </div>
                             <div class="mb-3">
                                 <label class="form-label">비밀번호</label>
                                 <input type="password" class="form-control" id="proxyPassword" 
-                                       placeholder="비밀번호">
+                                       placeholder="SSH 접속 비밀번호">
                             </div>
                             <div class="mb-3">
                                 <label class="form-label">설명</label>
-                                <textarea class="form-control" id="proxyDescription" rows="3" 
-                                          placeholder="프록시 서버에 대한 설명"></textarea>
+                                <textarea class="form-control" id="proxyDescription" rows="2" 
+                                          placeholder="프록시 서버에 대한 간단한 설명"></textarea>
                             </div>
                             <div class="form-check">
                                 <input class="form-check-input" type="checkbox" id="proxyIsActive" checked>
-                                <label class="form-check-label" for="proxyIsActive">활성 상태</label>
+                                <label class="form-check-label" for="proxyIsActive">
+                                    활성 상태
+                                </label>
                             </div>
                         </form>
                     </div>
