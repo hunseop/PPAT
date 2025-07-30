@@ -2,7 +2,7 @@
 
 from flask import Blueprint, jsonify, request
 from models import ProxyServer, db
-from monitoring_module import ResourceMonitor
+from monitoring_module import ProxyMonitor
 import logging
 
 logger = logging.getLogger(__name__)
@@ -23,11 +23,39 @@ def get_resources():
         
         for proxy in active_proxies:
             try:
-                # ResourceMonitor 인스턴스 생성
-                monitor = ResourceMonitor(
+                # 사용자명과 비밀번호가 없으면 건너뜀
+                if not proxy.username or not proxy.password:
+                    logger.warning(f"프록시 {proxy.name}: SSH 사용자명 또는 비밀번호가 없습니다.")
+                    error_data = {
+                        'proxy_id': proxy.id,
+                        'proxy_name': proxy.name,
+                        'host': proxy.host,
+                        'group_name': proxy.group.name if proxy.group else None,
+                        'is_main': proxy.is_main,
+                        'resource_data': {
+                            'date': '',
+                            'time': '',
+                            'device': proxy.host,
+                            'cpu': 'error',
+                            'memory': 'error',
+                            'uc': 'error',
+                            'cc': 'error',
+                            'cs': 'error',
+                            'http': 'error',
+                            'https': 'error',
+                            'ftp': 'error',
+                            'total_sessions': 0
+                        }
+                    }
+                    resources_data.append(error_data)
+                    continue
+                
+                # ProxyMonitor 인스턴스 생성
+                monitor = ProxyMonitor(
                     host=proxy.host,
                     username=proxy.username,
                     password=proxy.password,
+                    ssh_port=proxy.ssh_port,
                     snmp_port=proxy.snmp_port,
                     snmp_community=proxy.snmp_community
                 )
@@ -67,7 +95,8 @@ def get_resources():
                         'cs': 'error',
                         'http': 'error',
                         'https': 'error',
-                        'ftp': 'error'
+                        'ftp': 'error',
+                        'total_sessions': 0
                     }
                 }
                 resources_data.append(error_data)
@@ -91,11 +120,15 @@ def get_proxy_resources(proxy_id):
         if not proxy.is_active:
             return jsonify({'error': '비활성화된 프록시입니다.'}), 400
         
-        # ResourceMonitor 인스턴스 생성
-        monitor = ResourceMonitor(
+        if not proxy.username or not proxy.password:
+            return jsonify({'error': 'SSH 사용자명 또는 비밀번호가 설정되지 않았습니다.'}), 400
+        
+        # ProxyMonitor 인스턴스 생성
+        monitor = ProxyMonitor(
             host=proxy.host,
             username=proxy.username,
             password=proxy.password,
+            ssh_port=proxy.ssh_port,
             snmp_port=proxy.snmp_port,
             snmp_community=proxy.snmp_community
         )
@@ -118,6 +151,89 @@ def get_proxy_resources(proxy_id):
         logger.error(f"프록시 {proxy_id} 리소스 수집 실패: {e}")
         return jsonify({'error': str(e)}), 500
 
+@monitoring_bp.route('/test/<int:proxy_id>', methods=['POST'])
+def test_proxy_connection(proxy_id):
+    """프록시 연결 테스트"""
+    try:
+        proxy = ProxyServer.query.get_or_404(proxy_id)
+        
+        if not proxy.username or not proxy.password:
+            return jsonify({
+                'success': False, 
+                'message': 'SSH 사용자명 또는 비밀번호가 설정되지 않았습니다.'
+            }), 400
+        
+        # ProxyMonitor로 연결 테스트
+        monitor = ProxyMonitor(
+            host=proxy.host,
+            username=proxy.username,
+            password=proxy.password,
+            ssh_port=proxy.ssh_port,
+            snmp_port=proxy.snmp_port,
+            snmp_community=proxy.snmp_community
+        )
+        
+        connection_result = monitor.test_connection()
+        
+        if connection_result:
+            # 연결 성공 시 프록시를 활성화
+            proxy.is_active = True
+            db.session.commit()
+            
+            return jsonify({
+                'success': True,
+                'message': f'{proxy.host}에 연결되었습니다.'
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'message': f'{proxy.host} 연결에 실패했습니다.'
+            })
+            
+    except Exception as e:
+        logger.error(f"프록시 {proxy_id} 연결 테스트 실패: {e}")
+        return jsonify({
+            'success': False,
+            'message': f'연결 테스트 중 오류: {str(e)}'
+        }), 500
+
+@monitoring_bp.route('/status/<int:proxy_id>', methods=['GET'])
+def get_proxy_comprehensive_status(proxy_id):
+    """프록시의 포괄적인 상태 정보"""
+    try:
+        proxy = ProxyServer.query.get_or_404(proxy_id)
+        
+        if not proxy.username or not proxy.password:
+            return jsonify({'error': 'SSH 사용자명 또는 비밀번호가 설정되지 않았습니다.'}), 400
+        
+        # ProxyMonitor 인스턴스 생성
+        monitor = ProxyMonitor(
+            host=proxy.host,
+            username=proxy.username,
+            password=proxy.password,
+            ssh_port=proxy.ssh_port,
+            snmp_port=proxy.snmp_port,
+            snmp_community=proxy.snmp_community
+        )
+        
+        # 포괄적 상태 정보 수집
+        status_data = monitor.get_comprehensive_status()
+        
+        result = {
+            'proxy_id': proxy.id,
+            'proxy_name': proxy.name,
+            'host': proxy.host,
+            'group_name': proxy.group.name if proxy.group else None,
+            'is_main': proxy.is_main,
+            'status': status_data
+        }
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        logger.error(f"프록시 {proxy_id} 포괄적 상태 조회 실패: {e}")
+        return jsonify({'error': str(e)}), 500
+
 @monitoring_bp.route('/summary', methods=['GET'])
 def get_monitoring_summary():
     """모니터링 요약 정보 조회"""
@@ -127,6 +243,12 @@ def get_monitoring_summary():
         
         # 활성 프록시 수
         active_proxies = ProxyServer.query.filter_by(is_active=True).count()
+        
+        # 사용자명/비밀번호가 설정된 프록시 수
+        configured_proxies = ProxyServer.query.filter(
+            ProxyServer.username.isnot(None),
+            ProxyServer.password.isnot(None)
+        ).count()
         
         # 그룹별 통계
         from sqlalchemy import func
@@ -140,6 +262,7 @@ def get_monitoring_summary():
             'total_proxies': total_proxies,
             'active_proxies': active_proxies,
             'offline_proxies': total_proxies - active_proxies,
+            'configured_proxies': configured_proxies,
             'group_stats': [
                 {
                     'group_id': stat.group_id,

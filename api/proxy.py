@@ -130,8 +130,8 @@ def create_proxy():
             snmp_port=data.get('snmp_port', 161),
             snmp_version=data.get('snmp_version', 'v2c'),
             snmp_community=data.get('snmp_community', 'public'),
-            username=data.get('username', 'root'),
-            password=data.get('password', '123456'),
+            username=data.get('username'),
+            password=data.get('password'),
             description=data.get('description', ''),
             group_id=group_id,
             is_active=False,  # 최초 등록 시 오프라인 상태
@@ -226,19 +226,55 @@ def delete_proxy(proxy_id):
 
 @proxy_bp.route('/proxies/<int:proxy_id>/test', methods=['POST'])
 def test_proxy_connection(proxy_id):
-    """프록시 연결 테스트"""
+    """프록시 연결 테스트 (모니터링 API로 리디렉션)"""
     try:
-        result = proxy_manager.test_proxy_connection(proxy_id)
-        if result.get('success'):
-            # 연결 테스트 성공 시 프록시 상태를 온라인으로 변경
-            proxy = ProxyServer.query.get(proxy_id)
-            if proxy:
-                proxy.is_active = True
-                db.session.commit()
-                proxy_manager.add_proxy(proxy) # 프록시 매니저에 다시 추가
-        return jsonify(result)
+        from monitoring_module import ProxyMonitor
+        
+        proxy = ProxyServer.query.get_or_404(proxy_id)
+        
+        if not proxy.username or not proxy.password:
+            return jsonify({
+                'success': False,
+                'message': 'SSH 사용자명과 비밀번호가 설정되지 않았습니다.'
+            }), 400
+        
+        # ProxyMonitor로 연결 테스트
+        monitor = ProxyMonitor(
+            host=proxy.host,
+            username=proxy.username,
+            password=proxy.password,
+            ssh_port=proxy.ssh_port,
+            snmp_port=proxy.snmp_port,
+            snmp_community=proxy.snmp_community
+        )
+        
+        connection_result = monitor.test_connection()
+        
+        if connection_result:
+            # 연결 성공 시 프록시를 활성화하고 proxy_manager에 추가
+            proxy.is_active = True
+            db.session.commit()
+            
+            # proxy_manager에 추가
+            from proxy_module.proxy_manager import proxy_manager
+            proxy_manager.add_proxy(proxy)
+            
+            return jsonify({
+                'success': True,
+                'message': f'{proxy.host}에 성공적으로 연결되었습니다.'
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'message': f'{proxy.host} 연결에 실패했습니다.'
+            })
+            
     except Exception as e:
-        return jsonify({'success': False, 'message': str(e)}), 500
+        logger.error(f"프록시 {proxy_id} 연결 테스트 실패: {e}")
+        return jsonify({
+            'success': False,
+            'message': f'연결 테스트 중 오류: {str(e)}'
+        }), 500
 
 # ==================== 프록시 모니터링 ====================
 

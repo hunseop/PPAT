@@ -15,10 +15,15 @@ import json
 import time
 from datetime import datetime
 
-def test_proxy_module(host, username='root', password='123456', port=22):
+def test_proxy_module(host, username=None, password=None, port=22):
     """proxy_module 테스트"""
     print(f"\n🔧 === PROXY_MODULE 테스트 ===")
     print(f"대상: {host}:{port} (사용자: {username})")
+    
+    if not username or not password:
+        print("⚠️  SSH 사용자명 또는 비밀번호가 없어 연결 테스트를 건너뜁니다.")
+        print("🔧 === PROXY_MODULE 테스트 완료 ===\n")
+        return
     
     try:
         from proxy_module.proxy_client import ProxyClient
@@ -31,12 +36,18 @@ def test_proxy_module(host, username='root', password='123456', port=22):
             print("✅ SSH 연결 성공!")
             
             print("📊 시스템 상태 조회...")
-            status = client.get_status()
-            print(f"Status: {json.dumps(status, indent=2, ensure_ascii=False)}")
+            try:
+                status = client.get_status()
+                print(f"Status: {json.dumps(status, indent=2, ensure_ascii=False)}")
+            except Exception as e:
+                print(f"❌ 상태 조회 실패: {e}")
             
             print("💾 리소스 정보 조회...")
-            resources = client.get_resources()
-            print(f"Resources: {json.dumps(resources, indent=2, ensure_ascii=False)}")
+            try:
+                resources = client.get_resources()
+                print(f"Resources: {json.dumps(resources, indent=2, ensure_ascii=False)}")
+            except Exception as e:
+                print(f"❌ 리소스 조회 실패: {e}")
             
         else:
             print("❌ SSH 연결 실패!")
@@ -46,10 +57,13 @@ def test_proxy_module(host, username='root', password='123456', port=22):
     
     print(f"🔧 === PROXY_MODULE 테스트 완료 ===\n")
 
-def test_monitoring_module(host, username='root', password='123456', snmp_port=161, snmp_community='public'):
+def test_monitoring_module(host, username=None, password=None, snmp_port=161, snmp_community='public'):
     """monitoring_module 테스트"""
     print(f"\n📊 === MONITORING_MODULE 테스트 ===")
     print(f"대상: {host} (SSH: {username}, SNMP: {snmp_port}/{snmp_community})")
+    
+    if not username or not password:
+        print("⚠️  SSH 사용자명 또는 비밀번호가 없어 연결 테스트를 건너뜁니다.")
     
     try:
         # Flask app context 설정
@@ -58,25 +72,42 @@ def test_monitoring_module(host, username='root', password='123456', snmp_port=1
         sys.path.append(os.path.dirname(os.path.abspath(__file__)))
         
         from app import create_app
-        from monitoring_module import ResourceMonitor
+        from monitoring_module import ProxyMonitor
         
         app = create_app()
         with app.app_context():
-            print("✅ ResourceMonitor 생성 중...")
-            monitor = ResourceMonitor(
+            print("✅ ProxyMonitor 생성 중...")
+            monitor = ProxyMonitor(
                 host=host, 
-                username=username, 
+                username=username,
                 password=password,
                 snmp_port=snmp_port,
                 snmp_community=snmp_community
             )
             
-            print("🔗 SSH 연결 테스트...")
-            try:
-                memory, unique_clients = monitor.get_memory_and_uniq_clients()
-                print(f"✅ SSH 연결 성공! 메모리: {memory}%, 고유 클라이언트: {unique_clients}")
-            except Exception as e:
-                print(f"❌ SSH 연결 실패: {e}")
+            if username and password:
+                print("🔗 SSH 연결 테스트...")
+                try:
+                    connection_result = monitor.test_connection()
+                    if connection_result:
+                        print("✅ SSH 연결 성공!")
+                        
+                        print("📊 시스템 상태 조회...")
+                        status = monitor.get_system_status()
+                        print(f"시스템 상태: {json.dumps(status, indent=2, ensure_ascii=False)}")
+                        
+                        print("💾 메모리 사용률 조회...")
+                        memory = monitor.get_memory_usage()
+                        print(f"메모리 사용률: {memory}%")
+                        
+                        print("👥 세션 정보 조회...")
+                        session_info = monitor.get_session_info()
+                        print(f"세션 정보: 고유 클라이언트 {session_info['unique_clients']}개, 총 세션 {session_info['total_sessions']}개")
+                        
+                    else:
+                        print("❌ SSH 연결 실패!")
+                except Exception as e:
+                    print(f"❌ SSH 연결 실패: {e}")
             
             print("📡 SNMP 데이터 수집...")
             try:
@@ -97,7 +128,7 @@ def test_monitoring_module(host, username='root', password='123456', snmp_port=1
     
     print(f"📊 === MONITORING_MODULE 테스트 완료 ===\n")
 
-def compare_modules(host, username='root', password='123456', port=22, snmp_port=161, snmp_community='public'):
+def compare_modules(host, username=None, password=None, port=22, snmp_port=161, snmp_community='public'):
     """두 모듈 비교 테스트"""
     print(f"\n🔍 === 모듈 비교 테스트 ===")
     print(f"대상: {host}")
@@ -126,19 +157,25 @@ def compare_modules(host, username='root', password='123456', port=22, snmp_port
         sys.path.append(os.path.dirname(os.path.abspath(__file__)))
         
         from app import create_app
-        from monitoring_module import ResourceMonitor
+        from monitoring_module import ProxyMonitor
         
         app = create_app()
         with app.app_context():
-            monitor = ResourceMonitor(host=host, username=username, password=password, 
-                                    snmp_port=snmp_port, snmp_community=snmp_community)
+            monitor = ProxyMonitor(host=host, username=username, password=password, 
+                                  ssh_port=port, snmp_port=snmp_port, snmp_community=snmp_community)
+            
+            if username and password:
+                monitoring_results['connection'] = monitor.test_connection()
+                if monitoring_results['connection']:
+                    monitoring_results['system_status'] = monitor.get_system_status()
+                    monitoring_results['memory'] = monitor.get_memory_usage()
+                    monitoring_results['session_info'] = monitor.get_session_info()
+            else:
+                monitoring_results['connection'] = False
+                monitoring_results['error'] = 'SSH 사용자명 또는 비밀번호가 없습니다.'
             
             monitoring_results['resource_data'] = monitor.get_resource_data()
             monitoring_results['snmp_data'] = monitor.get_snmp_data()
-            
-            memory, unique_clients = monitor.get_memory_and_uniq_clients()
-            monitoring_results['memory'] = memory
-            monitoring_results['unique_clients'] = unique_clients
         
     except Exception as e:
         monitoring_results['error'] = str(e)
@@ -183,14 +220,14 @@ def test_database_config():
                 print(f"   - 기본 주기: {config.default_interval}초")
                 print(f"   - 활성 상태: {config.is_active}")
             
-            # 활성 설정으로 ResourceMonitor 테스트
+            # 활성 설정으로 ProxyMonitor 테스트
             active_config = MonitoringConfig.query.filter_by(is_active=True).first()
             if active_config:
-                print(f"\n🔧 활성 설정으로 ResourceMonitor 테스트...")
-                from monitoring_module import ResourceMonitor
+                print(f"\n🔧 활성 설정으로 ProxyMonitor 테스트...")
+                from monitoring_module import ProxyMonitor
                 
                 # 더미 호스트로 설정 테스트
-                monitor = ResourceMonitor('127.0.0.1')
+                monitor = ProxyMonitor('127.0.0.1')
                 config_from_db = monitor.get_monitoring_config()
                 
                 print(f"✅ 데이터베이스에서 설정 조회 성공!")
@@ -225,8 +262,8 @@ def interactive_test():
             continue
         elif choice in ['1', '2', '3']:
             host = input("호스트 IP (기본값: 127.0.0.1): ").strip() or '127.0.0.1'
-            username = input("SSH 사용자명 (기본값: root): ").strip() or 'root'
-            password = input("SSH 비밀번호 (기본값: 123456): ").strip() or '123456'
+            username = input("SSH 사용자명 (없으면 Enter): ").strip() or None
+            password = input("SSH 비밀번호 (없으면 Enter): ").strip() or None
             
             if choice == '1':
                 port = input("SSH 포트 (기본값: 22): ").strip() or '22'
@@ -250,23 +287,23 @@ def main():
     # proxy_module 테스트
     proxy_parser = subparsers.add_parser('test-proxy', help='proxy_module 테스트')
     proxy_parser.add_argument('--host', required=True, help='대상 호스트 IP')
-    proxy_parser.add_argument('--username', default='root', help='SSH 사용자명 (기본값: root)')
-    proxy_parser.add_argument('--password', default='123456', help='SSH 비밀번호 (기본값: 123456)')
+    proxy_parser.add_argument('--username', help='SSH 사용자명')
+    proxy_parser.add_argument('--password', help='SSH 비밀번호')
     proxy_parser.add_argument('--port', type=int, default=22, help='SSH 포트 (기본값: 22)')
     
     # monitoring_module 테스트
     monitoring_parser = subparsers.add_parser('test-monitoring', help='monitoring_module 테스트')
     monitoring_parser.add_argument('--host', required=True, help='대상 호스트 IP')
-    monitoring_parser.add_argument('--username', default='root', help='SSH 사용자명 (기본값: root)')
-    monitoring_parser.add_argument('--password', default='123456', help='SSH 비밀번호 (기본값: 123456)')
+    monitoring_parser.add_argument('--username', help='SSH 사용자명')
+    monitoring_parser.add_argument('--password', help='SSH 비밀번호')
     monitoring_parser.add_argument('--snmp-port', type=int, default=161, help='SNMP 포트 (기본값: 161)')
     monitoring_parser.add_argument('--snmp-community', default='public', help='SNMP 커뮤니티 (기본값: public)')
     
     # 모듈 비교 테스트
     compare_parser = subparsers.add_parser('compare', help='두 모듈 비교 테스트')
     compare_parser.add_argument('--host', required=True, help='대상 호스트 IP')
-    compare_parser.add_argument('--username', default='root', help='SSH 사용자명 (기본값: root)')
-    compare_parser.add_argument('--password', default='123456', help='SSH 비밀번호 (기본값: 123456)')
+    compare_parser.add_argument('--username', help='SSH 사용자명')
+    compare_parser.add_argument('--password', help='SSH 비밀번호')
     compare_parser.add_argument('--port', type=int, default=22, help='SSH 포트 (기본값: 22)')
     compare_parser.add_argument('--snmp-port', type=int, default=161, help='SNMP 포트 (기본값: 161)')
     compare_parser.add_argument('--snmp-community', default='public', help='SNMP 커뮤니티 (기본값: public)')
