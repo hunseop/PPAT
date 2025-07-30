@@ -1,6 +1,6 @@
 """프록시 모니터링 시스템 메인 애플리케이션"""
 
-from flask import Flask, send_from_directory
+from flask import Flask, send_from_directory, render_template
 import os
 
 def create_app():
@@ -23,10 +23,10 @@ def create_app():
     # 메인 라우트
     @app.route('/')
     def index():
-        return send_from_directory('static', 'index.html')
+        return render_template('index.html')
     
-    # 정적 파일 라우트
-    @app.route('/<path:filename>')
+    # 정적 파일 라우트 (CSS, JS 등)
+    @app.route('/static/<path:filename>')
     def static_files(filename):
         return send_from_directory('static', filename)
     

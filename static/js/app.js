@@ -63,29 +63,32 @@ function updateGroupTable() {
     const tbody = document.getElementById('groupTableBody');
     
     if (groups.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted py-4">등록된 그룹이 없습니다</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-4">등록된 그룹이 없습니다</td></tr>';
         return;
     }
     
     tbody.innerHTML = groups.map(group => `
         <tr>
-            <td>
+            <td class="ps-3">
                 <strong>${group.name}</strong>
-                ${group.name === '기본그룹' ? '<span class="badge bg-info ms-2">기본</span>' : ''}
+                ${group.name === '기본그룹' ? '<span class="badge bg-info ms-2 small">기본</span>' : ''}
             </td>
             <td><small class="text-muted">${group.description || '-'}</small></td>
             <td>
-                <span class="badge bg-primary">${group.proxy_count || 0}대</span>
+                <span class="badge bg-light text-dark">${group.proxy_count || 0}대</span>
             </td>
             <td>
+                ${group.main_server ? `<span class="badge bg-warning text-dark">${group.main_server}</span>` : '<span class="text-muted small">미지정</span>'}
+            </td>
+            <td class="text-center">
                 <div class="btn-group btn-group-sm">
-                    <button class="btn btn-outline-primary" 
+                    <button class="btn btn-outline-primary btn-sm" 
                             onclick="editGroup(${group.id})"
                             title="수정">
                         <i class="fas fa-edit"></i>
                     </button>
                     ${group.name !== '기본그룹' ? `
-                        <button class="btn btn-outline-danger" 
+                        <button class="btn btn-outline-danger btn-sm" 
                                 onclick="deleteGroup(${group.id})"
                                 title="삭제">
                             <i class="fas fa-trash"></i>
@@ -290,37 +293,42 @@ function updateProxyTable() {
     
     tbody.innerHTML = proxies.map(proxy => `
         <tr>
-            <td>
+            <td class="ps-3">
                 <strong>${proxy.name}</strong>
-                ${proxy.is_main ? '<span class="badge bg-warning ms-1">Main</span>' : '<span class="badge bg-secondary ms-1">Cluster</span>'}
+                <br><small class="text-muted">${proxy.description || ''}</small>
             </td>
-            <td><code>${proxy.host}</code></td>
-            <td>${proxy.ssh_port}</td>
-            <td>${proxy.username}</td>
+            <td>
+                <code class="text-primary">${proxy.host}</code>
+                <br><small class="text-muted">SSH: ${proxy.ssh_port} | SNMP: ${proxy.snmp_port}</small>
+            </td>
             <td>
                 <span class="badge bg-light text-dark">${proxy.group_name || '미지정'}</span>
             </td>
             <td>
+                ${proxy.is_main ? 
+                    '<span class="badge bg-warning text-dark">메인</span>' : 
+                    '<span class="badge bg-secondary">클러스터</span>'
+                }
+            </td>
+            <td>
                 <span class="badge ${proxy.is_active ? 'bg-success' : 'bg-secondary'}">
-                    <i class="fas ${proxy.is_active ? 'fa-check' : 'fa-times'}"></i>
                     ${proxy.is_active ? '온라인' : '오프라인'}
                 </span>
             </td>
-            <td><small class="text-muted">${proxy.description || '-'}</small></td>
-            <td>
+            <td class="text-center">
                 <div class="btn-group btn-group-sm">
-                    <button class="btn btn-outline-info" 
+                    <button class="btn btn-outline-info btn-sm" 
                             onclick="testConnection(${proxy.id})" 
                             id="testBtn-${proxy.id}"
                             title="연결 테스트">
                         <i class="fas fa-plug"></i>
                     </button>
-                    <button class="btn btn-outline-primary" 
+                    <button class="btn btn-outline-primary btn-sm" 
                             onclick="editProxy(${proxy.id})"
                             title="수정">
                         <i class="fas fa-edit"></i>
                     </button>
-                    <button class="btn btn-outline-danger" 
+                    <button class="btn btn-outline-danger btn-sm" 
                             onclick="deleteProxy(${proxy.id})"
                             title="삭제">
                         <i class="fas fa-trash"></i>
@@ -354,10 +362,12 @@ function clearForm() {
     document.getElementById('proxyName').value = '';
     document.getElementById('proxyHost').value = '';
     document.getElementById('proxySshPort').value = '22';
+    document.getElementById('proxySnmpPort').value = '161';
     document.getElementById('proxyUsername').value = 'root';
     document.getElementById('proxyPassword').value = '';
     document.getElementById('proxyDescription').value = '';
     document.getElementById('proxyIsActive').checked = false; // PRD 반영: 최초 오프라인
+    document.getElementById('proxyIsMain').checked = false;
     document.getElementById('proxyGroup').value = '';
 }
 
@@ -385,10 +395,12 @@ async function saveProxy() {
             name: name,
             host: host,
             ssh_port: parseInt(document.getElementById('proxySshPort').value) || 22,
+            snmp_port: parseInt(document.getElementById('proxySnmpPort').value) || 161,
             username: document.getElementById('proxyUsername').value || 'root',
             password: document.getElementById('proxyPassword').value || '123456',
             description: document.getElementById('proxyDescription').value,
             is_active: document.getElementById('proxyIsActive').checked,
+            is_main: document.getElementById('proxyIsMain').checked,
             group_id: groupId ? parseInt(groupId) : null
         };
         
@@ -450,10 +462,12 @@ function editProxy(proxyId) {
     document.getElementById('proxyName').value = editingProxy.name;
     document.getElementById('proxyHost').value = editingProxy.host;
     document.getElementById('proxySshPort').value = editingProxy.ssh_port;
+    document.getElementById('proxySnmpPort').value = editingProxy.snmp_port || 161;
     document.getElementById('proxyUsername').value = editingProxy.username;
     document.getElementById('proxyPassword').value = ''; // 보안상 비워둠
     document.getElementById('proxyDescription').value = editingProxy.description || '';
     document.getElementById('proxyIsActive').checked = editingProxy.is_active;
+    document.getElementById('proxyIsMain').checked = editingProxy.is_main || false;
     document.getElementById('proxyGroup').value = editingProxy.group_id || '';
     
     modal.show();

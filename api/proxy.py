@@ -127,12 +127,20 @@ def create_proxy():
             name=data['name'],
             host=data['host'],
             ssh_port=data.get('ssh_port', 22),
+            snmp_port=data.get('snmp_port', 161),
             username=data.get('username', 'root'),
             password=data.get('password', '123456'),
             description=data.get('description', ''),
             group_id=group_id,
-            is_active=False  # 최초 등록 시 오프라인 상태
+            is_active=False,  # 최초 등록 시 오프라인 상태
+            is_main=data.get('is_main', False)
         )
+        
+        # 메인 클러스터 지정 시 해당 그룹의 다른 메인 클러스터 해제
+        if proxy.is_main:
+            existing_main = ProxyServer.query.filter_by(group_id=group_id, is_main=True).first()
+            if existing_main:
+                existing_main.is_main = False
         
         db.session.add(proxy)
         db.session.commit()
@@ -164,6 +172,8 @@ def update_proxy(proxy_id):
             proxy.host = data['host']
         if data.get('ssh_port'):
             proxy.ssh_port = data['ssh_port']
+        if data.get('snmp_port'):
+            proxy.snmp_port = data['snmp_port']
         if data.get('username'):
             proxy.username = data['username']
         if data.get('password'):
@@ -172,6 +182,13 @@ def update_proxy(proxy_id):
             proxy.description = data['description']
         if 'is_active' in data:
             proxy.is_active = data['is_active']
+        if 'is_main' in data:
+            # 메인 클러스터로 변경하는 경우 해당 그룹의 다른 메인 클러스터 해제
+            if data['is_main'] and not proxy.is_main:
+                existing_main = ProxyServer.query.filter_by(group_id=proxy.group_id, is_main=True).first()
+                if existing_main and existing_main.id != proxy.id:
+                    existing_main.is_main = False
+            proxy.is_main = data['is_main']
         
         db.session.commit()
         

@@ -15,17 +15,25 @@ class ProxyGroup(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
-    # 관계
-    proxies = db.relationship('ProxyServer', backref='group', lazy=True, cascade='all, delete-orphan')
+    # 관계 설정
+    servers = db.relationship('ProxyServer', backref='group', lazy=True, cascade='all, delete-orphan')
     
     def to_dict(self):
+        # 메인 서버 찾기
+        main_server = None
+        for server in self.servers:
+            if server.is_main:
+                main_server = server.name
+                break
+        
         return {
             'id': self.id,
             'name': self.name,
             'description': self.description,
+            'proxy_count': len(self.servers),
+            'main_server': main_server,
             'created_at': self.created_at.isoformat() if self.created_at else None,
-            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
-            'proxy_count': len(self.proxies)
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None
         }
 
 class ProxyServer(db.Model):
@@ -34,17 +42,17 @@ class ProxyServer(db.Model):
     
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
-    host = db.Column(db.String(255), nullable=False)
+    host = db.Column(db.String(45), nullable=False)  # IPv4/IPv6 지원
     ssh_port = db.Column(db.Integer, default=22)
-    username = db.Column(db.String(100), default='root')
-    password = db.Column(db.String(255), default='123456')  # 실제 환경에서는 암호화 필요
-    is_active = db.Column(db.Boolean, default=True)
+    snmp_port = db.Column(db.Integer, default=161)
+    username = db.Column(db.String(50), default='root')
+    password = db.Column(db.String(255))  # 암호화 저장 권장
     description = db.Column(db.Text)
+    is_active = db.Column(db.Boolean, default=False)
+    is_main = db.Column(db.Boolean, default=False)  # 메인 클러스터 여부
+    group_id = db.Column(db.Integer, db.ForeignKey('proxy_groups.id'), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    
-    # 외래키
-    group_id = db.Column(db.Integer, db.ForeignKey('proxy_groups.id'), nullable=False)
     
     def to_dict(self):
         return {
@@ -52,9 +60,11 @@ class ProxyServer(db.Model):
             'name': self.name,
             'host': self.host,
             'ssh_port': self.ssh_port,
+            'snmp_port': self.snmp_port,
             'username': self.username,
-            'is_active': self.is_active,
             'description': self.description,
+            'is_active': self.is_active,
+            'is_main': self.is_main,
             'group_id': self.group_id,
             'group_name': self.group.name if self.group else None,
             'created_at': self.created_at.isoformat() if self.created_at else None,
