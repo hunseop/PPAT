@@ -2,8 +2,7 @@
 
 from flask import Blueprint, request, jsonify
 from models import db, ProxyServer, ProxyGroup
-import subprocess
-import socket
+from proxy_module.proxy_manager import proxy_manager
 from datetime import datetime
 
 proxy_bp = Blueprint('proxy', __name__)
@@ -49,6 +48,9 @@ def create_proxy():
         db.session.add(proxy)
         db.session.commit()
         
+        # 프록시 매니저에 추가
+        proxy_manager.add_proxy(proxy)
+        
         return jsonify(proxy.to_dict()), 201
         
     except Exception as e:
@@ -79,6 +81,10 @@ def update_proxy(proxy_id):
         
         db.session.commit()
         
+        # 프록시 매니저에서 제거 후 다시 추가 (정보 업데이트)
+        proxy_manager.remove_proxy(proxy_id)
+        proxy_manager.add_proxy(proxy)
+        
         return jsonify(proxy.to_dict())
         
     except Exception as e:
@@ -90,6 +96,10 @@ def delete_proxy(proxy_id):
     """프록시 서버 삭제"""
     try:
         proxy = ProxyServer.query.get_or_404(proxy_id)
+        
+        # 프록시 매니저에서 제거
+        proxy_manager.remove_proxy(proxy_id)
+        
         db.session.delete(proxy)
         db.session.commit()
         
@@ -105,24 +115,20 @@ def test_proxy_connection(proxy_id):
     try:
         proxy = ProxyServer.query.get_or_404(proxy_id)
         
-        # SSH 연결 테스트
-        success = test_ssh_connection(proxy.host, proxy.ssh_port)
+        # 프록시 매니저를 통한 연결 테스트
+        result = proxy_manager.test_proxy_connection(proxy_id)
+        
+        if not result or 'success' not in result:
+            # 매니저에 프록시가 없는 경우 직접 추가 후 테스트
+            proxy_manager.add_proxy(proxy)
+            result = proxy_manager.test_proxy_connection(proxy_id)
         
         # 상태 업데이트
-        proxy.is_active = success
+        proxy.is_active = result.get('success', False)
         proxy.updated_at = datetime.utcnow()
         db.session.commit()
         
-        if success:
-            return jsonify({
-                'success': True,
-                'message': f'{proxy.host}:{proxy.ssh_port}에 성공적으로 연결되었습니다.'
-            })
-        else:
-            return jsonify({
-                'success': False,
-                'message': f'{proxy.host}:{proxy.ssh_port}에 연결할 수 없습니다.'
-            })
+        return jsonify(result)
             
     except Exception as e:
         return jsonify({
@@ -130,14 +136,105 @@ def test_proxy_connection(proxy_id):
             'message': f'연결 테스트 중 오류가 발생했습니다: {str(e)}'
         }), 500
 
-def test_ssh_connection(host, port):
-    """SSH 연결 테스트"""
+@proxy_bp.route('/proxies/<int:proxy_id>/info', methods=['GET'])
+def get_proxy_system_info(proxy_id):
+    """프록시 서버 시스템 정보 조회"""
     try:
-        # 간단한 TCP 연결 테스트 (실제 SSH 인증은 하지 않음)
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.settimeout(5)  # 5초 타임아웃
-        result = sock.connect_ex((host, port))
-        sock.close()
-        return result == 0
-    except Exception:
-        return False
+        proxy = ProxyServer.query.get_or_404(proxy_id)
+        
+        # 매니저에 프록시가 없으면 추가
+        if proxy_id not in proxy_manager.clients:
+            proxy_manager.add_proxy(proxy)
+        
+        info = proxy_manager.get_proxy_system_info(proxy_id)
+        return jsonify(info)
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@proxy_bp.route('/proxies/<int:proxy_id>/resources', methods=['GET'])
+def get_proxy_resources(proxy_id):
+    """프록시 서버 리소스 사용률 조회"""
+    try:
+        proxy = ProxyServer.query.get_or_404(proxy_id)
+        
+        # 매니저에 프록시가 없으면 추가
+        if proxy_id not in proxy_manager.clients:
+            proxy_manager.add_proxy(proxy)
+        
+        resources = proxy_manager.get_proxy_resource_usage(proxy_id)
+        return jsonify(resources)
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@proxy_bp.route('/proxies/<int:proxy_id>/services', methods=['GET'])
+def get_proxy_services(proxy_id):
+    """프록시 서버 서비스 상태 조회"""
+    try:
+        proxy = ProxyServer.query.get_or_404(proxy_id)
+        
+        # 매니저에 프록시가 없으면 추가
+        if proxy_id not in proxy_manager.clients:
+            proxy_manager.add_proxy(proxy)
+        
+        services = proxy_manager.check_proxy_services(proxy_id)
+        return jsonify(services)
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@proxy_bp.route('/proxies/<int:proxy_id>/command', methods=['POST'])
+def execute_command(proxy_id):
+    """프록시 서버에서 명령 실행"""
+    try:
+        proxy = ProxyServer.query.get_or_404(proxy_id)
+        data = request.get_json()
+        
+        if not data or not data.get('command'):
+            return jsonify({'error': '명령어가 필요합니다.'}), 400
+        
+        # 매니저에 프록시가 없으면 추가
+        if proxy_id not in proxy_manager.clients:
+            proxy_manager.add_proxy(proxy)
+        
+        result = proxy_manager.execute_command_on_proxy(proxy_id, data['command'])
+        return jsonify(result)
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@proxy_bp.route('/monitoring/start', methods=['POST'])
+def start_monitoring():
+    """모니터링 시작"""
+    try:
+        # 프록시 목록 다시 로드
+        proxy_manager.reload_proxies()
+        
+        # 모니터링 시작
+        proxy_manager.start_monitoring()
+        
+        return jsonify({'message': '모니터링이 시작되었습니다.'})
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@proxy_bp.route('/monitoring/stop', methods=['POST'])
+def stop_monitoring():
+    """모니터링 중지"""
+    try:
+        proxy_manager.stop_monitoring()
+        return jsonify({'message': '모니터링이 중지되었습니다.'})
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@proxy_bp.route('/monitoring/status', methods=['GET'])
+def get_monitoring_status():
+    """모니터링 상태 조회"""
+    try:
+        status = proxy_manager.get_monitoring_status()
+        return jsonify(status)
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500

@@ -35,11 +35,15 @@ def create_app():
             default_group = ProxyGroup(name='기본그룹', description='기본 프록시 그룹')
             db.session.add(default_group)
             db.session.commit()
+        
+        # 프록시 매니저 초기화
+        from proxy_module.proxy_manager import proxy_manager
+        proxy_manager.reload_proxies()
     
     return app
 
 if __name__ == '__main__':
     app = create_app()
     print(f"🚀 프록시 모니터링 시스템 시작")
-    print(f"🌐 접속 주소: http://127.0.0.1:5000")
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    print(f"🌐 접속 주소: http://127.0.0.1:5007")
+    app.run(debug=True, host='0.0.0.0', port=5007)
