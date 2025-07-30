@@ -1,180 +1,143 @@
-"""프록시 관리 API"""
+"""프록시 서버 관리 API"""
 
 from flask import Blueprint, request, jsonify
-from models import ProxyGroup, ProxyServer, db
-from sqlalchemy.exc import IntegrityError
+from models import db, ProxyServer, ProxyGroup
+import subprocess
+import socket
+from datetime import datetime
 
 proxy_bp = Blueprint('proxy', __name__)
 
-# 프록시 그룹 관리
-@proxy_bp.route('/groups', methods=['GET'])
-def get_groups():
-    """프록시 그룹 목록 조회"""
-    groups = ProxyGroup.query.all()
-    return jsonify([group.to_dict() for group in groups])
-
-@proxy_bp.route('/groups', methods=['POST'])
-def create_group():
-    """프록시 그룹 생성"""
-    data = request.get_json()
-    
-    if not data or not data.get('name'):
-        return jsonify({'error': 'Group name is required'}), 400
-    
-    group = ProxyGroup(
-        name=data['name'],
-        description=data.get('description', '')
-    )
-    
-    try:
-        db.session.add(group)
-        db.session.commit()
-        return jsonify(group.to_dict()), 201
-    except IntegrityError:
-        db.session.rollback()
-        return jsonify({'error': 'Group name already exists'}), 409
-
-@proxy_bp.route('/groups/<int:group_id>', methods=['PUT'])
-def update_group(group_id):
-    """프록시 그룹 수정"""
-    group = ProxyGroup.query.get_or_404(group_id)
-    data = request.get_json()
-    
-    if not data:
-        return jsonify({'error': 'No data provided'}), 400
-    
-    if 'name' in data:
-        group.name = data['name']
-    if 'description' in data:
-        group.description = data['description']
-    
-    try:
-        db.session.commit()
-        return jsonify(group.to_dict())
-    except IntegrityError:
-        db.session.rollback()
-        return jsonify({'error': 'Group name already exists'}), 409
-
-@proxy_bp.route('/groups/<int:group_id>', methods=['DELETE'])
-def delete_group(group_id):
-    """프록시 그룹 삭제"""
-    group = ProxyGroup.query.get_or_404(group_id)
-    
-    # 그룹에 속한 프록시가 있는지 확인
-    if group.proxies:
-        return jsonify({'error': 'Cannot delete group with proxies'}), 400
-    
-    db.session.delete(group)
-    db.session.commit()
-    return '', 204
-
-# 프록시 서버 관리
-@proxy_bp.route('/servers', methods=['GET'])
-def get_servers():
+@proxy_bp.route('/proxies', methods=['GET'])
+def get_proxies():
     """프록시 서버 목록 조회"""
-    group_id = request.args.get('group_id', type=int)
-    is_main = request.args.get('is_main')
-    
-    query = ProxyServer.query
-    
-    if group_id:
-        query = query.filter_by(group_id=group_id)
-    if is_main is not None:
-        query = query.filter_by(is_main=is_main.lower() == 'true')
-    
-    servers = query.all()
-    return jsonify([server.to_dict() for server in servers])
+    try:
+        proxies = ProxyServer.query.all()
+        return jsonify([proxy.to_dict() for proxy in proxies])
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
-@proxy_bp.route('/servers', methods=['POST'])
-def create_server():
-    """프록시 서버 생성"""
-    data = request.get_json()
-    
-    required_fields = ['name', 'host', 'group_id']
-    for field in required_fields:
-        if not data or not data.get(field):
-            return jsonify({'error': f'{field} is required'}), 400
-    
-    # 그룹이 존재하는지 확인
-    group = ProxyGroup.query.get(data['group_id'])
-    if not group:
-        return jsonify({'error': 'Group not found'}), 404
-    
-    # 같은 그룹에서 main proxy가 이미 있는지 확인
-    if data.get('is_main', False):
-        existing_main = ProxyServer.query.filter_by(
-            group_id=data['group_id'], 
-            is_main=True
-        ).first()
-        if existing_main:
-            return jsonify({'error': 'Main proxy already exists in this group'}), 409
-    
-    server = ProxyServer(
-        name=data['name'],
-        host=data['host'],
-        ssh_port=data.get('ssh_port', 22),
-        snmp_port=data.get('snmp_port', 161),
-        username=data.get('username', 'root'),
-        password=data.get('password', '123456'),
-        is_main=data.get('is_main', False),
-        is_active=data.get('is_active', True),
-        description=data.get('description', ''),
-        group_id=data['group_id']
-    )
-    
-    db.session.add(server)
-    db.session.commit()
-    return jsonify(server.to_dict()), 201
+@proxy_bp.route('/proxies', methods=['POST'])
+def create_proxy():
+    """프록시 서버 추가"""
+    try:
+        data = request.get_json()
+        
+        # 필수 필드 검증
+        if not data.get('name') or not data.get('host'):
+            return jsonify({'error': '이름과 호스트는 필수 항목입니다.'}), 400
+        
+        # 기본 그룹이 없으면 생성
+        default_group = ProxyGroup.query.filter_by(name='기본그룹').first()
+        if not default_group:
+            default_group = ProxyGroup(name='기본그룹', description='기본 프록시 그룹')
+            db.session.add(default_group)
+            db.session.commit()
+        
+        # 새 프록시 서버 생성
+        proxy = ProxyServer(
+            name=data['name'],
+            host=data['host'],
+            ssh_port=data.get('ssh_port', 22),
+            username=data.get('username', 'root'),
+            password=data.get('password', '123456'),
+            description=data.get('description', ''),
+            is_active=data.get('is_active', True),
+            group_id=default_group.id
+        )
+        
+        db.session.add(proxy)
+        db.session.commit()
+        
+        return jsonify(proxy.to_dict()), 201
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
 
-@proxy_bp.route('/servers/<int:server_id>', methods=['PUT'])
-def update_server(server_id):
+@proxy_bp.route('/proxies/<int:proxy_id>', methods=['PUT'])
+def update_proxy(proxy_id):
     """프록시 서버 수정"""
-    server = ProxyServer.query.get_or_404(server_id)
-    data = request.get_json()
-    
-    if not data:
-        return jsonify({'error': 'No data provided'}), 400
-    
-    # Main proxy 변경 시 중복 확인
-    if 'is_main' in data and data['is_main'] and not server.is_main:
-        existing_main = ProxyServer.query.filter_by(
-            group_id=server.group_id, 
-            is_main=True
-        ).first()
-        if existing_main:
-            return jsonify({'error': 'Main proxy already exists in this group'}), 409
-    
-    # 업데이트 가능한 필드들
-    updatable_fields = [
-        'name', 'host', 'ssh_port', 'snmp_port', 
-        'username', 'password', 'is_main', 'is_active', 'description'
-    ]
-    
-    for field in updatable_fields:
-        if field in data:
-            setattr(server, field, data[field])
-    
-    db.session.commit()
-    return jsonify(server.to_dict())
+    try:
+        proxy = ProxyServer.query.get_or_404(proxy_id)
+        data = request.get_json()
+        
+        # 필수 필드 검증
+        if not data.get('name') or not data.get('host'):
+            return jsonify({'error': '이름과 호스트는 필수 항목입니다.'}), 400
+        
+        # 업데이트
+        proxy.name = data['name']
+        proxy.host = data['host']
+        proxy.ssh_port = data.get('ssh_port', 22)
+        proxy.username = data.get('username', 'root')
+        if data.get('password'):  # 비밀번호가 제공된 경우만 업데이트
+            proxy.password = data['password']
+        proxy.description = data.get('description', '')
+        proxy.is_active = data.get('is_active', True)
+        proxy.updated_at = datetime.utcnow()
+        
+        db.session.commit()
+        
+        return jsonify(proxy.to_dict())
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
 
-@proxy_bp.route('/servers/<int:server_id>', methods=['DELETE'])
-def delete_server(server_id):
+@proxy_bp.route('/proxies/<int:proxy_id>', methods=['DELETE'])
+def delete_proxy(proxy_id):
     """프록시 서버 삭제"""
-    server = ProxyServer.query.get_or_404(server_id)
-    
-    db.session.delete(server)
-    db.session.commit()
-    return '', 204
+    try:
+        proxy = ProxyServer.query.get_or_404(proxy_id)
+        db.session.delete(proxy)
+        db.session.commit()
+        
+        return jsonify({'message': '프록시 서버가 삭제되었습니다.'})
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
 
-@proxy_bp.route('/servers/<int:server_id>/test', methods=['POST'])
-def test_server_connection(server_id):
+@proxy_bp.route('/proxies/<int:proxy_id>/test', methods=['POST'])
+def test_proxy_connection(proxy_id):
     """프록시 서버 연결 테스트"""
-    server = ProxyServer.query.get_or_404(server_id)
-    
-    # 실제 환경에서는 monitoring_module을 사용하여 연결 테스트
-    # 여기서는 간단한 응답만 반환
-    return jsonify({
-        'success': True,
-        'message': f'Connection test to {server.host}:{server.ssh_port} successful',
-        'timestamp': '2024-01-01T00:00:00Z'
-    })
+    try:
+        proxy = ProxyServer.query.get_or_404(proxy_id)
+        
+        # SSH 연결 테스트
+        success = test_ssh_connection(proxy.host, proxy.ssh_port)
+        
+        # 상태 업데이트
+        proxy.is_active = success
+        proxy.updated_at = datetime.utcnow()
+        db.session.commit()
+        
+        if success:
+            return jsonify({
+                'success': True,
+                'message': f'{proxy.host}:{proxy.ssh_port}에 성공적으로 연결되었습니다.'
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'message': f'{proxy.host}:{proxy.ssh_port}에 연결할 수 없습니다.'
+            })
+            
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': f'연결 테스트 중 오류가 발생했습니다: {str(e)}'
+        }), 500
+
+def test_ssh_connection(host, port):
+    """SSH 연결 테스트"""
+    try:
+        # 간단한 TCP 연결 테스트 (실제 SSH 인증은 하지 않음)
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(5)  # 5초 타임아웃
+        result = sock.connect_ex((host, port))
+        sock.close()
+        return result == 0
+    except Exception:
+        return False
