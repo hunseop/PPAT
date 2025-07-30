@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>프록시 모니터링 시스템</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body>
+    <div id="app">
+        <!-- 네비게이션 -->
+        <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+            <div class="container">
+                <a class="navbar-brand" href="#">
+                    <i class="fas fa-server me-2"></i>
+                    프록시 모니터링 시스템
+                </a>
+                <div class="navbar-nav ms-auto">
+                    <a class="nav-link active" href="#" onclick="showTab('management')">
+                        <i class="fas fa-cog me-1"></i>관리
+                    </a>
+                    <a class="nav-link" href="#" onclick="alert('개발 예정')">
+                        <i class="fas fa-chart-line me-1"></i>자원사용률
+                    </a>
+                    <a class="nav-link" href="#" onclick="alert('개발 예정')">
+                        <i class="fas fa-globe me-1"></i>세션브라우저
+                    </a>
+                    <a class="nav-link" href="#" onclick="alert('개발 예정')">
+                        <i class="fas fa-shield-alt me-1"></i>정책조회
+                    </a>
+                </div>
+            </div>
+        </nav>
+
+        <!-- 알림 영역 -->
+        <div id="notifications" class="container mt-3"></div>
+
+        <!-- 메인 컨텐츠 -->
+        <div class="container mt-4">
+            <!-- 관리 탭 -->
+            <div id="managementTab">
+                <div class="row">
+                    <div class="col-12">
+                        <h2 class="mb-4">
+                            <i class="fas fa-server me-2"></i>프록시 서버 관리
+                        </h2>
+                    </div>
+                </div>
+
+                <!-- 프록시 그룹 관리 섹션 -->
+                <div class="row mb-4">
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-header d-flex justify-content-between align-items-center">
+                                <h5 class="mb-0">
+                                    <i class="fas fa-layer-group me-2"></i>프록시 그룹
+                                </h5>
+                                <button class="btn btn-primary btn-sm" onclick="showGroupModal()">
+                                    <i class="fas fa-plus me-1"></i>그룹 추가
+                                </button>
+                            </div>
+                            <div class="card-body">
+                                <div class="table-responsive">
+                                    <table class="table table-hover">
+                                        <thead class="table-light">
+                                            <tr>
+                                                <th>그룹명</th>
+                                                <th>설명</th>
+                                                <th>프록시 수</th>
+                                                <th>작업</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="groupTableBody">
+                                            <!-- 그룹 목록이 여기에 동적으로 로드됩니다 -->
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 프록시 서버 관리 섹션 -->
+                <div class="row">
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-header d-flex justify-content-between align-items-center">
+                                <h5 class="mb-0">
+                                    <i class="fas fa-server me-2"></i>프록시 서버
+                                </h5>
+                                <button class="btn btn-primary btn-sm" onclick="showModal()">
+                                    <i class="fas fa-plus me-1"></i>프록시 추가
+                                </button>
+                            </div>
+                            <div class="card-body">
+                                <div class="table-responsive">
+                                    <table class="table table-hover">
+                                        <thead class="table-light">
+                                            <tr>
+                                                <th>이름</th>
+                                                <th>IP 주소</th>
+                                                <th>포트</th>
+                                                <th>사용자명</th>
+                                                <th>그룹</th>
+                                                <th>상태</th>
+                                                <th>설명</th>
+                                                <th>작업</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="proxyTableBody">
+                                            <!-- 프록시 목록이 여기에 동적으로 로드됩니다 -->
+                                        </tbody>
+                                    </table>
+                                </div>
+
+                                <!-- 빈 상태 메시지 -->
+                                <div id="emptyMessage" class="text-center py-5" style="display: none;">
+                                    <i class="fas fa-server fa-3x text-muted mb-3"></i>
+                                    <h5 class="text-muted">등록된 프록시 서버가 없습니다</h5>
+                                    <p class="text-muted">첫 번째 프록시 서버를 추가해보세요.</p>
+                                    <button class="btn btn-primary" onclick="showModal()">
+                                        <i class="fas fa-plus me-1"></i>프록시 추가
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 프록시 그룹 모달 -->
+    <div class="modal fade" id="groupModal" tabindex="-1" aria-labelledby="groupModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="groupModalTitle">프록시 그룹 추가</h5>
+                    <button type="button" class="btn-close" onclick="closeGroupModal()"></button>
+                </div>
+                <div class="modal-body">
+                    <form>
+                        <div class="mb-3">
+                            <label for="groupName" class="form-label">그룹명 *</label>
+                            <input type="text" class="form-control" id="groupName" placeholder="예: 서울 센터" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="groupDescription" class="form-label">설명</label>
+                            <textarea class="form-control" id="groupDescription" rows="2" placeholder="그룹에 대한 설명을 입력하세요"></textarea>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" onclick="closeGroupModal()">취소</button>
+                    <button type="button" class="btn btn-primary" id="saveGroupButton" onclick="saveGroup()">
+                        <i class="fas fa-save me-1"></i>저장
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 프록시 서버 모달 -->
+    <div class="modal fade" id="proxyModal" tabindex="-1" aria-labelledby="proxyModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalTitle">프록시 추가</h5>
+                    <button type="button" class="btn-close" onclick="closeModal()"></button>
+                </div>
+                <div class="modal-body">
+                    <form>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="proxyName" class="form-label">이름 *</label>
+                                    <input type="text" class="form-control" id="proxyName" placeholder="예: Main Proxy" required>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="proxyHost" class="form-label">IP 주소 *</label>
+                                    <input type="text" class="form-control" id="proxyHost" placeholder="예: 192.168.1.100" required>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-4">
+                                <div class="mb-3">
+                                    <label for="proxySshPort" class="form-label">SSH 포트</label>
+                                    <input type="number" class="form-control" id="proxySshPort" value="22" min="1" max="65535">
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="mb-3">
+                                    <label for="proxyUsername" class="form-label">사용자명</label>
+                                    <input type="text" class="form-control" id="proxyUsername" value="root">
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="mb-3">
+                                    <label for="proxyGroup" class="form-label">그룹</label>
+                                    <select class="form-select" id="proxyGroup">
+                                        <option value="">그룹을 선택하세요</option>
+                                        <!-- 그룹 옵션들이 동적으로 로드됩니다 -->
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label for="proxyPassword" class="form-label">비밀번호</label>
+                            <input type="password" class="form-control" id="proxyPassword" placeholder="SSH 비밀번호를 입력하세요">
+                        </div>
+                        <div class="mb-3">
+                            <label for="proxyDescription" class="form-label">설명</label>
+                            <textarea class="form-control" id="proxyDescription" rows="2" placeholder="프록시 서버에 대한 설명을 입력하세요"></textarea>
+                        </div>
+                        <div class="mb-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="proxyIsActive">
+                                <label class="form-check-label" for="proxyIsActive">
+                                    활성화 상태로 시작
+                                </label>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal()">취소</button>
+                    <button type="button" class="btn btn-primary" id="saveButton" onclick="saveProxy()">
+                        <i class="fas fa-save me-1"></i>저장
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- 애플리케이션 스크립트 -->
+    <script src="/js/app.js"></script>
+</body>
+</html>
