@@ -138,7 +138,7 @@ def create_proxy():
         db.session.commit()
         
         # 프록시 매니저에 추가
-        proxy_manager.add_proxy(proxy.id, proxy.host, proxy.ssh_port, proxy.username, proxy.password)
+        proxy_manager.add_proxy(proxy)
         
         return jsonify(proxy.to_dict()), 201
     except Exception as e:
@@ -177,7 +177,7 @@ def update_proxy(proxy_id):
         
         # 프록시 매니저 업데이트
         proxy_manager.remove_proxy(proxy_id)
-        proxy_manager.add_proxy(proxy_id, proxy.host, proxy.ssh_port, proxy.username, proxy.password)
+        proxy_manager.add_proxy(proxy)
         
         return jsonify(proxy.to_dict())
     except Exception as e:
