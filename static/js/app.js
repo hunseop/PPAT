@@ -583,8 +583,9 @@ async function loadResourcesData() {
             const result = await response.json();
             resources = result.data || [];
             console.log('로드된 자원 수:', resources.length);
-            updateResourcesTable();
+            updateResourcesTable(resources); // Pass resources directly
             updateLastUpdate();
+            updateCollectedItemsCount(); // 수집된 항목 수 업데이트
         } else {
             const errorText = await response.text();
             console.error('자원 API 오류:', response.status, errorText);
@@ -621,12 +622,11 @@ function updateSummaryCards(summary) {
 }
 
 // 자원사용률 테이블 업데이트
-function updateResourcesTable() {
-    console.log('자원사용률 테이블 업데이트 중...');
+function updateResourcesTable(data) {
     const tbody = document.getElementById('resourcesTableBody');
     const emptyMessage = document.getElementById('resourcesEmptyMessage');
     
-    if (resources.length === 0) {
+    if (!data || data.length === 0) {
         tbody.innerHTML = '';
         emptyMessage.style.display = 'block';
         return;
@@ -634,59 +634,46 @@ function updateResourcesTable() {
     
     emptyMessage.style.display = 'none';
     
-    tbody.innerHTML = resources.map(resource => {
-        const data = resource.resource_data;
+    tbody.innerHTML = data.map(item => {
+        const resource = item.resource_data;
+        const cpuClass = getCpuClass(resource.cpu);
+        const memoryClass = getMemoryClass(resource.memory);
+        const role = item.is_main ? '메인' : '서브';
+        const roleClass = item.is_main ? 'badge bg-primary' : 'badge bg-secondary';
         
-        // CPU와 메모리 사용률 표시
-        const cpuValue = data.cpu === 'error' ? 'N/A' : `${data.cpu}%`;
-        const memoryValue = data.memory === 'error' ? 'N/A' : `${data.memory}%`;
-        
-        // CPU와 메모리 상태에 따른 색상
-        const cpuClass = getCpuClass(data.cpu);
-        const memoryClass = getMemoryClass(data.memory);
-        
-        // 연결 상태 확인
-        const isConnected = data.cpu !== 'error' && data.memory !== 'error';
-        const statusClass = isConnected ? 'bg-success' : 'bg-danger';
-        const statusText = isConnected ? '연결됨' : '연결 실패';
+        // 값이 'error' 또는 '-1'인 경우 '-'로 표시
+        const formatValue = (value) => {
+            if (value === 'error' || value === '-1' || value === -1) return '-';
+            return value;
+        };
         
         return `
             <tr>
                 <td class="ps-3">
-                    <strong>${resource.proxy_name}</strong>
-                    <br><small class="text-muted">${resource.host}</small>
+                    <div class="fw-medium">${item.proxy_name}</div>
+                    <small class="text-muted">${item.host}</small>
+                </td>
+                <td>${item.group_name || '-'}</td>
+                <td><span class="${roleClass}">${role}</span></td>
+                <td><span class="${cpuClass}">${formatValue(resource.cpu)}${resource.cpu !== 'error' && resource.cpu !== '-1' ? '%' : ''}</span></td>
+                <td><span class="${memoryClass}">${formatValue(resource.memory)}${resource.memory !== 'error' && resource.memory !== '-1' ? '%' : ''}</span></td>
+                <td>${formatValue(resource.uc)}</td>
+                <td>${formatValue(resource.cc)}</td>
+                <td>${formatValue(resource.cs)}</td>
+                <td>${formatValue(resource.http)}</td>
+                <td>${formatValue(resource.https)}</td>
+                <td>${formatValue(resource.ftp)}</td>
+                <td>
+                    ${resource.cpu === 'error' || resource.memory === 'error' ? 
+                        '<span class="badge bg-danger">오류</span>' : 
+                        '<span class="badge bg-success">정상</span>'}
                 </td>
                 <td>
-                    <span class="badge bg-light text-dark">${resource.group_name || '미지정'}</span>
-                </td>
-                <td>
-                    ${resource.is_main ? 
-                        '<span class="badge bg-warning text-dark">메인</span>' : 
-                        '<span class="badge bg-secondary">클러스터</span>'
-                    }
-                </td>
-                <td>
-                    <span class="badge ${cpuClass}">${cpuValue}</span>
-                </td>
-                <td>
-                    <span class="badge ${memoryClass}">${memoryValue}</span>
-                </td>
-                <td>
-                    <span class="text-muted">${data.uc === 'error' ? 'N/A' : data.uc + '개'}</span>
-                </td>
-                <td>
-                    <span class="badge ${statusClass}">${statusText}</span>
-                </td>
-                <td>
-                    <small class="text-muted">${data.time || 'N/A'}</small>
+                    <small class="text-muted">${resource.time || '-'}</small>
                 </td>
             </tr>
         `;
     }).join('');
-    
-    // 수집된 항목 수 업데이트
-    updateCollectedItemsCount();
-    console.log('자원사용률 테이블 업데이트 완료');
 }
 
 // CPU 사용률에 따른 CSS 클래스 반환
@@ -835,8 +822,11 @@ function updateNextUpdateTime() {
 
 // 수집된 항목 수 업데이트
 function updateCollectedItemsCount() {
-    const count = resources.length;
-    document.getElementById('collectedItemsCount').textContent = count;
+    const countElement = document.getElementById('collectedItemsCount');
+    if (countElement) {
+        // 수집되는 항목: CPU, Memory, UC, CC, CS, HTTP, HTTPS, FTP = 8개
+        countElement.textContent = '8';
+    }
 }
 
 // ==================== 공통 유틸리티 ====================

@@ -226,10 +226,8 @@ def delete_proxy(proxy_id):
 
 @proxy_bp.route('/proxies/<int:proxy_id>/test', methods=['POST'])
 def test_proxy_connection(proxy_id):
-    """프록시 연결 테스트 (모니터링 API로 리디렉션)"""
+    """프록시 연결 테스트 (proxy_module 사용)"""
     try:
-        from monitoring_module import ProxyMonitor
-        
         proxy = ProxyServer.query.get_or_404(proxy_id)
         
         if not proxy.username or not proxy.password:
@@ -238,25 +236,13 @@ def test_proxy_connection(proxy_id):
                 'message': 'SSH 사용자명과 비밀번호가 설정되지 않았습니다.'
             }), 400
         
-        # ProxyMonitor로 연결 테스트
-        monitor = ProxyMonitor(
-            host=proxy.host,
-            username=proxy.username,
-            password=proxy.password,
-            ssh_port=proxy.ssh_port,
-            snmp_port=proxy.snmp_port,
-            snmp_community=proxy.snmp_community
-        )
+        # proxy_module로 기본 연결 테스트
+        result = proxy_manager.test_proxy_connection(proxy_id)
         
-        connection_result = monitor.test_connection()
-        
-        if connection_result:
+        if result.get('success'):
             # 연결 성공 시 프록시를 활성화하고 proxy_manager에 추가
             proxy.is_active = True
             db.session.commit()
-            
-            # proxy_manager에 추가
-            from proxy_module.proxy_manager import proxy_manager
             proxy_manager.add_proxy(proxy)
             
             return jsonify({
@@ -266,7 +252,7 @@ def test_proxy_connection(proxy_id):
         else:
             return jsonify({
                 'success': False,
-                'message': f'{proxy.host} 연결에 실패했습니다.'
+                'message': result.get('message', f'{proxy.host} 연결에 실패했습니다.')
             })
             
     except Exception as e:
