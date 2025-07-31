@@ -49,25 +49,23 @@ def create_app():
         # 기본 모니터링 설정 생성
         default_config = MonitoringConfig.query.filter_by(name='기본설정').first()
         if not default_config:
-            default_snmp_oids = {
-                'CPU': '1.3.6.1.2.1.25.3.3.1.2.1',
-                'Memory': '1.3.6.1.2.1.25.2.2.1.1',
-                'CC': '1.3.6.1.2.1.25.4.2.1.2',
-                'CS': '1.3.6.1.2.1.25.4.2.1.3',
-                'HTTP': '1.3.6.1.2.1.25.4.2.1.2',
-                'HTTPS': '1.3.6.1.2.1.25.4.2.1.3',
-                'FTP': '1.3.6.1.2.1.25.4.2.1.4'
-            }
-            default_session_cmd = """/opt/mwg/bin/mwg-core -S connections | awk -F " \\| " '{print $2" | "$5" | "$6" | "$6" | "$7" | "$18" | "$10" | "$11" | "$15"}'"""
-            
             default_config = MonitoringConfig(
                 name='기본설정',
                 description='기본 모니터링 설정',
-                snmp_oids=default_snmp_oids,
-                session_cmd=default_session_cmd,
+                snmp_oids={
+                    'CPU': '1.3.6.1.2.1.25.3.3.1.2.1',
+                    'Memory': '1.3.6.1.2.1.25.2.2.1.1',
+                    'CC': '1.3.6.1.2.1.25.4.2.1.2',
+                    'CS': '1.3.6.1.2.1.25.4.2.1.3',
+                    'HTTP': '1.3.6.1.2.1.25.4.2.1.2',
+                    'HTTPS': '1.3.6.1.2.1.25.4.2.1.3',
+                    'FTP': '1.3.6.1.2.1.25.4.2.1.4'
+                },
+                session_cmd="""/opt/mwg/bin/mwg-core -S connections | awk -F " \\\\\\| " '{print $2" | "$5" | "$6" | "$7" | "$18" | "$10" | "$11" | "$15"}'""",
                 cpu_threshold=80,
                 memory_threshold=80,
-                default_interval=30
+                default_interval=30,
+                is_active=True
             )
             db.session.add(default_config)
         
