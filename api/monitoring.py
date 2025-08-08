@@ -4,6 +4,7 @@ from flask import Blueprint, jsonify, request
 from models import ProxyServer, MonitoringConfig, db, SessionRecord, ProxyGroup
 from monitoring_module import ProxyMonitor
 import logging
+from core import monitoring_service
 
 logger = logging.getLogger(__name__)
 
@@ -14,92 +15,8 @@ def get_resources():
     """모든 활성 프록시의 리소스 사용률 조회 (group_id 필터 지원)"""
     try:
         group_id = request.args.get('group_id', type=int)
-        query = ProxyServer.query.filter_by(is_active=True)
-        if group_id:
-            query = query.filter(ProxyServer.group_id == group_id)
-        active_proxies = query.all()
-        
-        if not active_proxies:
-            return jsonify({'message': '활성화된 프록시 서버가 없습니다.', 'data': []}), 200
-        
-        resources_data = []
-        
-        for proxy in active_proxies:
-            try:
-                if not proxy.username or not proxy.password:
-                    logger.warning(f"프록시 {proxy.name}: SSH 사용자명 또는 비밀번호가 없습니다.")
-                    error_data = {
-                        'proxy_id': proxy.id,
-                        'proxy_name': proxy.name,
-                        'host': proxy.host,
-                        'group_name': proxy.group.name if proxy.group else None,
-                        'is_main': proxy.is_main,
-                        'resource_data': {
-                            'date': '',
-                            'time': '',
-                            'device': proxy.host,
-                            'cpu': 'error',
-                            'memory': 'error',
-                            'uc': 'error',
-                            'cc': 'error',
-                            'cs': 'error',
-                            'http': 'error',
-                            'https': 'error',
-                            'ftp': 'error',
-                            'total_sessions': 0
-                        }
-                    }
-                    resources_data.append(error_data)
-                    continue
-                
-                monitor = ProxyMonitor(
-                    host=proxy.host,
-                    username=proxy.username,
-                    password=proxy.password,
-                    ssh_port=proxy.ssh_port,
-                    snmp_port=proxy.snmp_port,
-                    snmp_community=proxy.snmp_community
-                )
-                resource_data = monitor.get_resource_data()
-                proxy_resource = {
-                    'proxy_id': proxy.id,
-                    'proxy_name': proxy.name,
-                    'host': proxy.host,
-                    'group_name': proxy.group.name if proxy.group else None,
-                    'is_main': proxy.is_main,
-                    'resource_data': resource_data
-                }
-                resources_data.append(proxy_resource)
-            except Exception as e:
-                logger.error(f"프록시 {proxy.name} 리소스 수집 실패: {e}")
-                error_data = {
-                    'proxy_id': proxy.id,
-                    'proxy_name': proxy.name,
-                    'host': proxy.host,
-                    'group_name': proxy.group.name if proxy.group else None,
-                    'is_main': proxy.is_main,
-                    'resource_data': {
-                        'date': '',
-                        'time': '',
-                        'device': proxy.host,
-                        'cpu': 'error',
-                        'memory': 'error',
-                        'uc': 'error',
-                        'cc': 'error',
-                        'cs': 'error',
-                        'http': 'error',
-                        'https': 'error',
-                        'ftp': 'error',
-                        'total_sessions': 0
-                    }
-                }
-                resources_data.append(error_data)
-        
-        return jsonify({
-            'success': True,
-            'data': resources_data,
-            'total_proxies': len(resources_data)
-        })
+        resources_data = monitoring_service.collect_resources(group_id)
+        return jsonify({'success': True, 'data': resources_data, 'total_proxies': len(resources_data)})
         
     except Exception as e:
         logger.error(f"리소스 데이터 조회 실패: {e}")
@@ -276,7 +193,7 @@ def get_monitoring_summary():
 def get_monitoring_config():
     """활성 모니터링 설정 조회"""
     try:
-        config = MonitoringConfig.query.filter_by(is_active=True).first()
+        config = monitoring_service.get_active_config()
         if not config:
             return jsonify({'error': '활성화된 모니터링 설정이 없습니다.'}), 404
         return jsonify(config.to_dict())
@@ -288,27 +205,10 @@ def get_monitoring_config():
 def update_monitoring_config():
     """활성 모니터링 설정 수정 (SNMP OIDs, session_cmd, 임계치 등)"""
     try:
-        config = MonitoringConfig.query.filter_by(is_active=True).first()
-        if not config:
-            return jsonify({'error': '활성화된 모니터링 설정이 없습니다.'}), 404
-
         data = request.get_json() or {}
-
-        if 'snmp_oids' in data and isinstance(data['snmp_oids'], dict):
-            config.snmp_oids = data['snmp_oids']
-        if 'session_cmd' in data and isinstance(data['session_cmd'], str):
-            config.session_cmd = data['session_cmd']
-        if 'cpu_threshold' in data:
-            config.cpu_threshold = int(data['cpu_threshold'])
-        if 'memory_threshold' in data:
-            config.memory_threshold = int(data['memory_threshold'])
-        if 'default_interval' in data:
-            config.default_interval = int(data['default_interval'])
-
-        db.session.commit()
+        config = monitoring_service.update_active_config(data)
         return jsonify({'success': True, 'config': config.to_dict()})
     except Exception as e:
-        db.session.rollback()
         logger.error(f"모니터링 설정 수정 실패: {e}")
         return jsonify({'error': str(e)}), 500
 
@@ -385,50 +285,9 @@ def get_sessions_by_proxy(proxy_id):
 def collect_sessions_by_group(group_id):
     """그룹 단위 세션 수집 및 임시저장. ?persist=1 시 기존 그룹 데이터 삭제 후 저장"""
     try:
-        persist = request.args.get('persist', default='1')
-        group = ProxyGroup.query.get_or_404(group_id)
-        proxies = ProxyServer.query.filter_by(group_id=group_id, is_active=True).all()
-        results = []
-        if persist == '1':
-            SessionRecord.query.filter_by(group_id=group_id).delete()
-            db.session.commit()
-        for proxy in proxies:
-            try:
-                if not proxy.username or not proxy.password:
-                    continue
-                monitor = ProxyMonitor(
-                    host=proxy.host,
-                    username=proxy.username,
-                    password=proxy.password,
-                    ssh_port=proxy.ssh_port,
-                    snmp_port=proxy.snmp_port,
-                    snmp_community=proxy.snmp_community
-                )
-                info = monitor.get_session_info()
-                for s in info.get('sessions', []):
-                    record = SessionRecord(
-                        group_id=group_id,
-                        proxy_id=proxy.id,
-                        client_ip=s.get('Client IP') or (s.get('ClientIP') or ''),
-                        server_ip=s.get('Server IP') or (s.get('ServerIP') or ''),
-                        protocol=s.get('Protocol') or '',
-                        user=s.get('User Name') or s.get('User') or '',
-                        policy=s.get('URL') or '',
-                        category=s.get('Age(seconds) Status') or s.get('Status') or '',
-                        extra=s
-                    )
-                    db.session.add(record)
-                db.session.commit()
-                results.append({
-                    'proxy_id': proxy.id,
-                    'proxy_name': proxy.name,
-                    'host': proxy.host,
-                    'total_sessions': info.get('total_sessions', 0)
-                })
-            except Exception as e:
-                logger.error(f"세션 수집 실패 ({proxy.name}): {e}")
-                db.session.rollback()
-        return jsonify({'success': True, 'group_id': group_id, 'collected_from': len(results)})
+        persist = request.args.get('persist', default='1') == '1'
+        saved = monitoring_service.collect_sessions_by_group(group_id, persist=persist)
+        return jsonify({'success': True, 'group_id': group_id, 'saved': saved})
     except Exception as e:
         logger.error(f"그룹 세션 수집 실패: {e}")
         return jsonify({'error': str(e)}), 500
@@ -439,23 +298,7 @@ def search_sessions():
     try:
         group_id = request.args.get('group_id', type=int)
         keyword = request.args.get('q', type=str)
-        query = SessionRecord.query
-        if group_id:
-            query = query.filter(SessionRecord.group_id == group_id)
-        if keyword:
-            like = f"%{keyword}%"
-            query = query.filter(
-                db.or_(
-                    SessionRecord.client_ip.ilike(like),
-                    SessionRecord.server_ip.ilike(like),
-                    SessionRecord.user.ilike(like),
-                    SessionRecord.policy.ilike(like),
-                    SessionRecord.protocol.ilike(like),
-                    SessionRecord.category.ilike(like)
-                )
-            )
-        query = query.order_by(SessionRecord.created_at.desc()).limit(1000)
-        records = [r.to_dict() for r in query.all()]
+        records = monitoring_service.search_sessions(group_id, keyword, limit=1000)
         return jsonify({'success': True, 'data': records})
     except Exception as e:
         logger.error(f"세션 검색 실패: {e}")

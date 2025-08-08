@@ -3,6 +3,7 @@
 from flask import Blueprint, request, jsonify
 from models import db, ProxyGroup, ProxyServer
 from proxy_module.proxy_manager import proxy_manager
+from core import device_manager
 
 proxy_bp = Blueprint('proxy', __name__)
 
@@ -147,8 +148,8 @@ def create_proxy():
         db.session.add(proxy)
         db.session.commit()
         
-        # 프록시 매니저에 추가
-        proxy_manager.add_proxy(proxy)
+        # 장비 매니저에 반영
+        device_manager.add_or_update(proxy)
         
         return jsonify(proxy.to_dict()), 201
     except Exception as e:
@@ -198,9 +199,8 @@ def update_proxy(proxy_id):
         
         db.session.commit()
         
-        # 프록시 매니저 업데이트
-        proxy_manager.remove_proxy(proxy_id)
-        proxy_manager.add_proxy(proxy)
+        # 장비 매니저 반영
+        device_manager.add_or_update(proxy)
         
         return jsonify(proxy.to_dict())
     except Exception as e:
@@ -213,8 +213,8 @@ def delete_proxy(proxy_id):
     try:
         proxy = ProxyServer.query.get_or_404(proxy_id)
         
-        # 프록시 매니저에서 제거
-        proxy_manager.remove_proxy(proxy_id)
+        # 장비 매니저에서 제거
+        device_manager.remove(proxy_id)
         
         db.session.delete(proxy)
         db.session.commit()
@@ -226,7 +226,7 @@ def delete_proxy(proxy_id):
 
 @proxy_bp.route('/proxies/<int:proxy_id>/test', methods=['POST'])
 def test_proxy_connection(proxy_id):
-    """프록시 연결 테스트 (proxy_module 사용)"""
+    """프록시 연결 테스트 (DeviceManager 사용)"""
     try:
         proxy = ProxyServer.query.get_or_404(proxy_id)
         
@@ -236,14 +236,13 @@ def test_proxy_connection(proxy_id):
                 'message': 'SSH 사용자명과 비밀번호가 설정되지 않았습니다.'
             }), 400
         
-        # proxy_module로 기본 연결 테스트
-        result = proxy_manager.test_proxy_connection(proxy_id)
+        result = device_manager.test_connection(proxy_id)
         
         if result.get('success'):
-            # 연결 성공 시 프록시를 활성화하고 proxy_manager에 추가
+            # 연결 성공 시 프록시를 활성화하고 장비 매니저에 추가
             proxy.is_active = True
             db.session.commit()
-            proxy_manager.add_proxy(proxy)
+            device_manager.add_or_update(proxy)
             
             return jsonify({
                 'success': True,
@@ -256,11 +255,7 @@ def test_proxy_connection(proxy_id):
             })
             
     except Exception as e:
-        logger.error(f"프록시 {proxy_id} 연결 테스트 실패: {e}")
-        return jsonify({
-            'success': False,
-            'message': f'연결 테스트 중 오류: {str(e)}'
-        }), 500
+        return jsonify({'success': False, 'message': f'연결 테스트 중 오류: {str(e)}'}), 500
 
 # ==================== 프록시 모니터링 ====================
 
