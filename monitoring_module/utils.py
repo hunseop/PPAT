@@ -1,6 +1,7 @@
 import time
 import logging
 from datetime import datetime
+import re
 
 # 로깅 설정
 logging.basicConfig(
@@ -16,8 +17,15 @@ def interruptible_sleep(seconds, is_running):
         time.sleep(0.1)
 
 def split_line(lst: str) -> list:
-    """파이프로 구분된 문자열을 리스트로 분리"""
-    return [item.strip().rstrip('\n') for item in lst.split(' | ')]
+    """파이프 구분 문자열을 리스트로 분리 (양쪽 공백 허용)
+    예: 'a | b|c| d ' -> ['a','b','c','d']
+    """
+    if lst is None:
+        return []
+    # 줄끝 개행 제거 및 앞뒤 공백 제거 후 파이프 기준 분리
+    parts = re.split(r"\s*\|\s*", lst.strip().rstrip('\n'))
+    # 공백만 있는 빈 요소 제거
+    return [p.strip() for p in parts if p is not None]
 
 def get_current_timestamp():
     """현재 시간을 반환"""

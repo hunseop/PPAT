@@ -48,36 +48,21 @@ class ProxyMonitor:
         self.retry_delay = 5
     
     def get_monitoring_config(self):
-        """데이터베이스에서 모니터링 설정을 가져옴"""
+        """데이터베이스에서 모니터링 설정을 가져옴 (DB 전용)"""
         try:
             from flask import current_app
             if current_app:
                 from models import MonitoringConfig
                 config = MonitoringConfig.query.filter_by(is_active=True).first()
-                if config:
-                    return config
-            return self._get_default_config()
+                return config
+            return None
         except Exception as e:
             logger.error(f"모니터링 설정 조회 실패: {e}")
-            return self._get_default_config()
+            return None
     
     def _get_default_config(self):
-        """기본 모니터링 설정 반환"""
-        class DefaultConfig:
-            snmp_oids = {
-                'CPU': '1.3.6.1.2.1.25.3.3.1.2.1',
-                'Memory': '1.3.6.1.2.1.25.2.2.1.1', 
-                'CC': '1.3.6.1.2.1.25.4.2.1.2',
-                'CS': '1.3.6.1.2.1.25.4.2.1.3',
-                'HTTP': '1.3.6.1.2.1.25.4.2.1.2',
-                'HTTPS': '1.3.6.1.2.1.25.4.2.1.3',
-                'FTP': '1.3.6.1.2.1.25.4.2.1.4'
-            }
-            session_cmd = """/opt/mwg/bin/mwg-core -S connections | awk -F " \\\\\\| " '{print $2" | "$5" | "$6" | "$7" | "$18" | "$10" | "$11" | "$15"}'"""
-            cpu_threshold = 80
-            memory_threshold = 80
-        
-        return DefaultConfig()
+        """더 이상 사용하지 않음: 하드코딩 기본값 제거"""
+        return None
     
     def _create_ssh_connection(self):
         """SSH 연결 생성"""
@@ -202,6 +187,9 @@ class ProxyMonitor:
         """세션 정보 조회"""
         try:
             config = self.get_monitoring_config()
+            if not config or not config.session_cmd:
+                logger.warning("session_cmd 미설정: 세션 조회를 건너뜁니다.")
+                return {'unique_clients': 0, 'total_sessions': 0, 'sessions': []}
             session_lines, _ = self._execute_ssh_command(config.session_cmd)
             
             if not session_lines:
@@ -215,8 +203,16 @@ class ProxyMonitor:
                 return {'unique_clients': 0, 'total_sessions': 0, 'sessions': []}
             
             # 헤더와 데이터 분리
-            header = split_line(session_lines[1])
-            data_lines = session_lines[2:]
+            # 헤더 라인 탐색 (첫 번째 비어있지 않고 파이프 포함된 줄)
+            header_idx = None
+            for idx, ln in enumerate(session_lines):
+                if '|' in ln:
+                    header_idx = idx
+                    break
+            if header_idx is None:
+                return {'unique_clients': 0, 'total_sessions': 0, 'sessions': []}
+            header = split_line(session_lines[header_idx])
+            data_lines = session_lines[header_idx + 1:]
             
             sessions = []
             client_ips = set()
@@ -230,12 +226,11 @@ class ProxyMonitor:
                             session[column] = data[i] if i < len(data) else ''
                         sessions.append(session)
                         
-                        # Client IP 추출
-                        client_ip = session.get('Client IP', '')
-                        if client_ip and ':' in client_ip:
-                            ip = client_ip.split(':')[0]
-                            client_ips.add(ip)
-                            
+                        # Client IP 추출 (포트 구분자 ':' 제거)
+                        client_ip = (session.get('Client IP') or '').strip()
+                        if client_ip:
+                            client_ips.add(client_ip.split(':')[0])
+                        
                 except Exception as e:
                     logger.error(f"세션 데이터 파싱 오류: {e}")
                     continue
@@ -258,7 +253,10 @@ class ProxyMonitor:
         
         try:
             config = self.get_monitoring_config()
-            snmp_oids = config.snmp_oids
+            snmp_oids = (config.snmp_oids if config and config.snmp_oids else {})
+            if not snmp_oids:
+                logger.warning("SNMP OIDs 미설정: SNMP 수집을 건너뜁니다.")
+                return self._get_empty_snmp_data()
             
             # OID 객체 생성
             oids = [ObjectType(ObjectIdentity(oid)) for oid in snmp_oids.values()]
@@ -361,13 +359,13 @@ class ProxyMonitor:
             if validate_resource_data(result):
                 try:
                     config = self.get_monitoring_config()
-                    cpu_value = float(result['cpu']) if result['cpu'] != 'error' else -1
-                    mem_value = float(result['memory']) if result['memory'] != 'error' else -1
-                    
-                    if cpu_value >= config.cpu_threshold:
-                        logger.warning(f"CPU 사용률 임계값 초과: {cpu_value}%")
-                    if mem_value >= config.memory_threshold:
-                        logger.warning(f"메모리 사용률 임계값 초과: {mem_value}%")
+                    if config:
+                        cpu_value = float(result['cpu']) if result['cpu'] != 'error' else -1
+                        mem_value = float(result['memory']) if result['memory'] != 'error' else -1
+                        if cpu_value >= (config.cpu_threshold or 80):
+                            logger.warning(f"CPU 사용률 임계값 초과: {cpu_value}%")
+                        if mem_value >= (config.memory_threshold or 80):
+                            logger.warning(f"메모리 사용률 임계값 초과: {mem_value}%")
                 except (ValueError, AttributeError):
                     pass
             

@@ -3,6 +3,7 @@
 from flask import Blueprint, request, jsonify
 from models import db, ProxyGroup, ProxyServer
 from proxy_module.proxy_manager import proxy_manager
+from core import device_manager
 
 proxy_bp = Blueprint('proxy', __name__)
 
@@ -147,8 +148,8 @@ def create_proxy():
         db.session.add(proxy)
         db.session.commit()
         
-        # 프록시 매니저에 추가
-        proxy_manager.add_proxy(proxy)
+        # 장비 매니저에 반영
+        device_manager.add_or_update(proxy)
         
         return jsonify(proxy.to_dict()), 201
     except Exception as e:
@@ -198,9 +199,8 @@ def update_proxy(proxy_id):
         
         db.session.commit()
         
-        # 프록시 매니저 업데이트
-        proxy_manager.remove_proxy(proxy_id)
-        proxy_manager.add_proxy(proxy)
+        # 장비 매니저 반영
+        device_manager.add_or_update(proxy)
         
         return jsonify(proxy.to_dict())
     except Exception as e:
@@ -213,8 +213,8 @@ def delete_proxy(proxy_id):
     try:
         proxy = ProxyServer.query.get_or_404(proxy_id)
         
-        # 프록시 매니저에서 제거
-        proxy_manager.remove_proxy(proxy_id)
+        # 장비 매니저에서 제거
+        device_manager.remove(proxy_id)
         
         db.session.delete(proxy)
         db.session.commit()
@@ -226,7 +226,7 @@ def delete_proxy(proxy_id):
 
 @proxy_bp.route('/proxies/<int:proxy_id>/test', methods=['POST'])
 def test_proxy_connection(proxy_id):
-    """프록시 연결 테스트 (proxy_module 사용)"""
+    """프록시 연결 테스트 (DeviceManager 사용)"""
     try:
         proxy = ProxyServer.query.get_or_404(proxy_id)
         
@@ -236,14 +236,13 @@ def test_proxy_connection(proxy_id):
                 'message': 'SSH 사용자명과 비밀번호가 설정되지 않았습니다.'
             }), 400
         
-        # proxy_module로 기본 연결 테스트
-        result = proxy_manager.test_proxy_connection(proxy_id)
+        result = device_manager.test_connection(proxy_id)
         
         if result.get('success'):
-            # 연결 성공 시 프록시를 활성화하고 proxy_manager에 추가
+            # 연결 성공 시 프록시를 활성화하고 장비 매니저에 추가
             proxy.is_active = True
             db.session.commit()
-            proxy_manager.add_proxy(proxy)
+            device_manager.add_or_update(proxy)
             
             return jsonify({
                 'success': True,
@@ -256,11 +255,7 @@ def test_proxy_connection(proxy_id):
             })
             
     except Exception as e:
-        logger.error(f"프록시 {proxy_id} 연결 테스트 실패: {e}")
-        return jsonify({
-            'success': False,
-            'message': f'연결 테스트 중 오류: {str(e)}'
-        }), 500
+        return jsonify({'success': False, 'message': f'연결 테스트 중 오류: {str(e)}'}), 500
 
 # ==================== 프록시 모니터링 ====================
 
@@ -268,7 +263,7 @@ def test_proxy_connection(proxy_id):
 def get_proxy_info(proxy_id):
     """프록시 시스템 정보 조회"""
     try:
-        info = proxy_manager.get_proxy_system_info(proxy_id)
+        info = device_manager.get_system_info(proxy_id)
         return jsonify(info)
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -277,7 +272,7 @@ def get_proxy_info(proxy_id):
 def get_proxy_resources(proxy_id):
     """프록시 리소스 사용량 조회"""
     try:
-        resources = proxy_manager.get_proxy_resource_usage(proxy_id)
+        resources = device_manager.get_resource_usage(proxy_id)
         return jsonify(resources)
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -286,7 +281,7 @@ def get_proxy_resources(proxy_id):
 def get_proxy_services(proxy_id):
     """프록시 서비스 상태 조회"""
     try:
-        services = proxy_manager.check_proxy_services(proxy_id)
+        services = device_manager.check_services(proxy_id)
         return jsonify(services)
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -301,7 +296,7 @@ def execute_proxy_command(proxy_id):
         if not command:
             return jsonify({'error': '명령어가 필요합니다.'}), 400
         
-        result = proxy_manager.execute_command_on_proxy(proxy_id, command)
+        result = device_manager.execute_command(proxy_id, command)
         return jsonify(result)
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -312,8 +307,7 @@ def execute_proxy_command(proxy_id):
 def start_monitoring():
     """자동 모니터링 시작"""
     try:
-        proxy_manager.start_monitoring()
-        return jsonify({'message': '모니터링이 시작되었습니다.'})
+        return jsonify({'message': '프론트에서 제어'})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -321,8 +315,7 @@ def start_monitoring():
 def stop_monitoring():
     """자동 모니터링 중지"""
     try:
-        proxy_manager.stop_monitoring()
-        return jsonify({'message': '모니터링이 중지되었습니다.'})
+        return jsonify({'message': '프론트에서 제어'})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -330,7 +323,6 @@ def stop_monitoring():
 def get_monitoring_status():
     """모니터링 상태 조회"""
     try:
-        status = proxy_manager.get_monitoring_status()
-        return jsonify(status)
+        return jsonify({'active': False})
     except Exception as e:
         return jsonify({'error': str(e)}), 500

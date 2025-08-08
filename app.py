@@ -61,7 +61,7 @@ def create_app():
                     'HTTPS': '1.3.6.1.2.1.25.4.2.1.3',
                     'FTP': '1.3.6.1.2.1.25.4.2.1.4'
                 },
-                session_cmd="""/opt/mwg/bin/mwg-core -S connections | awk -F " \\\\\\| " '{print $2" | "$5" | "$6" | "$7" | "$18" | "$10" | "$11" | "$15"}'""",
+                session_cmd="/opt/mwg/bin/mwg-core -S connections | sed -E 's/\\s*\\|\\s*/ | /g'",
                 cpu_threshold=80,
                 memory_threshold=80,
                 default_interval=30,
@@ -78,8 +78,8 @@ if __name__ == '__main__':
     
     # 프록시 매니저 초기화 (앱 생성 후)
     with app.app_context():
-        from proxy_module.proxy_manager import proxy_manager
-        proxy_manager.reload_proxies()
+        from core import device_manager
+        device_manager.reload()
     
     print(f"🚀 프록시 모니터링 시스템 시작")
     print(f"🌐 접속 주소: http://127.0.0.1:5007")

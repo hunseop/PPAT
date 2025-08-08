@@ -116,3 +116,36 @@ class MonitoringConfig(db.Model):
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None
         }
+
+class SessionRecord(db.Model):
+    """세션 임시 저장 레코드"""
+    __tablename__ = 'session_records'
+
+    id = db.Column(db.Integer, primary_key=True)
+    group_id = db.Column(db.Integer, db.ForeignKey('proxy_groups.id'), nullable=True)
+    proxy_id = db.Column(db.Integer, db.ForeignKey('proxy_servers.id'), nullable=True)
+
+    client_ip = db.Column(db.String(128))
+    server_ip = db.Column(db.String(128))
+    protocol = db.Column(db.String(32))
+    user = db.Column(db.String(128))
+    policy = db.Column(db.String(256))
+    category = db.Column(db.String(256))
+    extra = db.Column(db.JSON)  # 원본 컬럼 전체를 JSON으로 보관
+
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'group_id': self.group_id,
+            'proxy_id': self.proxy_id,
+            'client_ip': self.client_ip,
+            'server_ip': self.server_ip,
+            'protocol': self.protocol,
+            'user': self.user,
+            'policy': self.policy,
+            'category': self.category,
+            'extra': self.extra,
+            'created_at': self.created_at.isoformat() if self.created_at else None
+        }
