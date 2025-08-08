@@ -17,6 +17,8 @@ let nextUpdateTimeout = null;
 
 // 세션 브라우저 데이터
 let sessions = [];
+let resourcesGroupId = null;
+let sessionsGroupId = null;
 
 // DOM 로드 완료 후 초기화
 document.addEventListener('DOMContentLoaded', function() {
@@ -40,7 +42,31 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // 관리 탭의 모니터링 설정 초기 로드
     loadMonitoringConfig();
+    // 그룹 셀렉트 초기화
+    initGroupSelectors();
 });
+
+async function initGroupSelectors() {
+    try {
+        const res = await fetch('/api/groups');
+        if (!res.ok) return;
+        const data = await res.json();
+        // 자원 탭 그룹
+        const resSel = document.getElementById('resourcesGroupSelect');
+        if (resSel) {
+            resSel.innerHTML = '<option value="">전체 그룹</option>' + data.map(g => `<option value="${g.id}">${g.name}</option>`).join('');
+            resSel.onchange = () => { resourcesGroupId = resSel.value ? parseInt(resSel.value) : null; if (isMonitoringActive) { loadResourcesData(); } };
+        }
+        // 세션 탭 그룹
+        const sesSel = document.getElementById('sessionGroupSelect');
+        if (sesSel) {
+            sesSel.innerHTML = '<option value="">그룹 선택</option>' + data.map(g => `<option value="${g.id}">${g.name}</option>`).join('');
+            sesSel.onchange = () => { sessionsGroupId = sesSel.value ? parseInt(sesSel.value) : null; };
+        }
+    } catch(e) {
+        console.error('그룹 셀렉트 초기화 실패', e);
+    }
+}
 
 // 탭 전환 함수
 function showTab(tabName) {
@@ -64,16 +90,19 @@ function showTab(tabName) {
         loadGroups();
         loadProxies();
         loadMonitoringConfig();
+        initGroupSelectors();
     } else if (tabName === 'resources') {
         document.getElementById('resourcesTab').style.display = 'block';
         document.querySelector('a[onclick="showTab(\'resources\')"]').classList.add('active');
         // 자동 호출 제거: 수동 시작만 가능
         // loadResourcesData();
         // loadMonitoringSummary();
+        initGroupSelectors();
     } else if (tabName === 'sessions') {
         if (sessionsTab) sessionsTab.style.display = 'block';
         document.querySelector('a[onclick="showTab(\'sessions\')"]').classList.add('active');
         populateSessionProxySelect();
+        initGroupSelectors();
     }
     
     currentTab = tabName;
@@ -634,7 +663,8 @@ async function testConnection(proxyId) {
 async function loadResourcesData() {
     console.log('자원사용률 데이터 로딩 시작...');
     try {
-        const response = await fetch('/api/monitoring/resources');
+        const qs = resourcesGroupId ? `?group_id=${resourcesGroupId}` : '';
+        const response = await fetch(`/api/monitoring/resources${qs}`);
         console.log('Resources response status:', response.status);
         
         if (response.ok) {
@@ -933,6 +963,7 @@ function getIconForType(type) {
 
 // ==================== 세션 브라우저 ====================
 function populateSessionProxySelect() {
+    // 그룹 기반으로 수집하도록 변경되어 프록시 단일 선택은 보조로 유지하거나 미사용
     const select = document.getElementById('sessionProxySelect');
     if (!select) return;
     select.innerHTML = '';
@@ -1001,4 +1032,61 @@ function updateSessionsTable(items) {
     });
 
     tbody.innerHTML = rows.join('');
+}
+
+async function collectSessionsByGroup() {
+    if (!sessionsGroupId) return showNotification('그룹을 선택하세요.', 'warning');
+    try {
+        const res = await fetch(`/api/monitoring/sessions/group/${sessionsGroupId}?persist=1`);
+        if (!res.ok) {
+            const txt = await res.text();
+            return showNotification(`수집 실패: ${txt}`, 'danger');
+        }
+        showNotification('세션 수집이 완료되었습니다.', 'success');
+    } catch (e) {
+        showNotification('세션 수집 중 오류가 발생했습니다.', 'danger');
+    }
+}
+
+async function searchSessions() {
+    const qInput = document.getElementById('sessionSearchInput');
+    const keyword = qInput ? qInput.value.trim() : '';
+    const params = new URLSearchParams();
+    if (sessionsGroupId) params.set('group_id', sessionsGroupId);
+    if (keyword) params.set('q', keyword);
+    try {
+        const res = await fetch(`/api/monitoring/sessions/search?${params.toString()}`);
+        if (!res.ok) {
+            const txt = await res.text();
+            return showNotification(`검색 실패: ${txt}`, 'danger');
+        }
+        const data = await res.json();
+        // search 결과 포맷에 맞춰 테이블 렌더링
+        updateSessionsSearchTable(data.data || []);
+    } catch (e) {
+        showNotification('세션 검색 중 오류가 발생했습니다.', 'danger');
+    }
+}
+
+function updateSessionsSearchTable(items) {
+    const tbody = document.getElementById('sessionsTableBody');
+    const emptyMessage = document.getElementById('sessionsEmptyMessage');
+    if (!tbody) return;
+    if (!items || items.length === 0) {
+        tbody.innerHTML = '';
+        if (emptyMessage) emptyMessage.style.display = 'block';
+        return;
+    }
+    if (emptyMessage) emptyMessage.style.display = 'none';
+    tbody.innerHTML = items.map(r => `
+        <tr>
+            <td class="ps-3">${r.proxy_id || '-'}</td>
+            <td>${r.client_ip || '-'}</td>
+            <td>${r.server_ip || '-'}</td>
+            <td>${r.protocol || '-'}</td>
+            <td>${r.user || '-'}</td>
+            <td>${r.policy || '-'}</td>
+            <td>${r.category || '-'}</td>
+        </tr>
+    `).join('');
 }

@@ -189,20 +189,8 @@
                     <div class="col-md-3">
                         <div class="card text-center shadow-sm">
                             <div class="card-body">
-                                <div class="mb-2">
-                                    <span class="badge" id="monitoringStatus">정지됨</span>
-                                </div>
-                                <div class="btn-group-vertical w-100">
-                                    <button class="btn btn-sm btn-success mb-1" id="startMonitoringBtn" onclick="startMonitoring()">
-                                        시작
-                                    </button>
-                                    <button class="btn btn-sm btn-danger mb-2" id="stopMonitoringBtn" onclick="stopMonitoring()" disabled>
-                                        중지
-                                    </button>
-                                    <button class="btn btn-sm btn-outline-primary" id="manualRefreshBtn" onclick="refreshResources()" disabled>
-                                        수동 새로고침
-                                    </button>
-                                </div>
+                                <h5 class="card-title text-secondary" id="resourcesGroupLabel">그룹 선택</h5>
+                                <select id="resourcesGroupSelect" class="form-select form-select-sm"></select>
                             </div>
                         </div>
                     </div>
@@ -212,8 +200,14 @@
                 <div class="row mb-4">
                     <div class="col-12">
                         <div class="card shadow-sm">
-                            <div class="card-header bg-white">
+                            <div class="card-header bg-white d-flex justify-content-between align-items-center">
                                 <h6 class="mb-0 text-muted">모니터링 설정</h6>
+                                <div class="d-flex align-items-center gap-2">
+                                    <span class="badge" id="monitoringStatus">정지됨</span>
+                                    <button class="btn btn-sm btn-success" id="startMonitoringBtn" onclick="startMonitoring()">시작</button>
+                                    <button class="btn btn-sm btn-danger" id="stopMonitoringBtn" onclick="stopMonitoring()" disabled>중지</button>
+                                    <button class="btn btn-sm btn-outline-primary" id="manualRefreshBtn" onclick="refreshResources()" disabled>수동 새로고침</button>
+                                </div>
                             </div>
                             <div class="card-body">
                                 <div class="row align-items-center">
@@ -299,9 +293,13 @@
                         <div class="card shadow-sm">
                             <div class="card-header bg-white d-flex justify-content-between align-items-center">
                                 <h5 class="mb-0 text-muted">세션 브라우저</h5>
-                                <div class="d-flex gap-2">
+                                <div class="d-flex gap-2 align-items-center">
+                                    <select id="sessionGroupSelect" class="form-select form-select-sm" style="min-width: 200px;"></select>
+                                    <button class="btn btn-sm btn-outline-secondary" onclick="collectSessionsByGroup()">그룹 수집</button>
+                                    <input id="sessionSearchInput" type="text" class="form-control form-control-sm" placeholder="IP, User, Policy 검색" style="min-width: 220px;">
+                                    <button class="btn btn-sm btn-primary" onclick="searchSessions()">검색</button>
                                     <select id="sessionProxySelect" class="form-select form-select-sm" style="min-width: 220px;"></select>
-                                    <button class="btn btn-sm btn-primary" onclick="loadSessions()">조회</button>
+                                    <button class="btn btn-sm btn-outline-primary" onclick="loadSessions()">프록시별 조회</button>
                                 </div>
                             </div>
                             <div class="card-body p-0">
