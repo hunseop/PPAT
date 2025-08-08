@@ -635,7 +635,7 @@ async function testConnection(proxyId) {
         testBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
         testBtn.disabled = true;
         
-        const response = await fetch(`/api/proxies/${proxyId}/test`, {
+        const response = await fetch(`/api/monitoring/test/${proxyId}`, {
             method: 'POST'
         });
         
@@ -1020,12 +1020,15 @@ function updateSessionsTable(items) {
             rows.push(`
                 <tr>
                     <td class="ps-3">${proxyName}</td>
+                    <td>${s['Transaction'] || '-'}</td>
+                    <td>${s['Creation Time'] || '-'}</td>
+                    <td>${s['Protocol'] || '-'}</td>
+                    <td>${s['Cust ID'] || '-'}</td>
+                    <td>${s['User Name'] || s['User'] || '-'}</td>
                     <td>${s['Client IP'] || '-'}</td>
                     <td>${s['Server IP'] || '-'}</td>
-                    <td>${s['Protocol'] || '-'}</td>
-                    <td>${s['User'] || '-'}</td>
-                    <td>${s['Policy'] || '-'}</td>
-                    <td>${s['Category'] || s['Rule'] || '-'}</td>
+                    <td>${s['URL'] || '-'}</td>
+                    <td>${s['Age(seconds) Status'] || s['Status'] || '-'}</td>
                 </tr>
             `);
         });

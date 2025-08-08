@@ -409,12 +409,12 @@ def collect_sessions_by_group(group_id):
                     record = SessionRecord(
                         group_id=group_id,
                         proxy_id=proxy.id,
-                        client_ip=s.get('Client IP'),
-                        server_ip=s.get('Server IP'),
-                        protocol=s.get('Protocol'),
-                        user=s.get('User'),
-                        policy=s.get('Policy'),
-                        category=s.get('Category') or s.get('Rule'),
+                        client_ip=s.get('Client IP') or (s.get('ClientIP') or ''),
+                        server_ip=s.get('Server IP') or (s.get('ServerIP') or ''),
+                        protocol=s.get('Protocol') or '',
+                        user=s.get('User Name') or s.get('User') or '',
+                        policy=s.get('URL') or '',
+                        category=s.get('Age(seconds) Status') or s.get('Status') or '',
                         extra=s
                     )
                     db.session.add(record)

@@ -203,8 +203,16 @@ class ProxyMonitor:
                 return {'unique_clients': 0, 'total_sessions': 0, 'sessions': []}
             
             # 헤더와 데이터 분리
-            header = split_line(session_lines[1])
-            data_lines = session_lines[2:]
+            # 헤더 라인 탐색 (첫 번째 비어있지 않고 파이프 포함된 줄)
+            header_idx = None
+            for idx, ln in enumerate(session_lines):
+                if '|' in ln:
+                    header_idx = idx
+                    break
+            if header_idx is None:
+                return {'unique_clients': 0, 'total_sessions': 0, 'sessions': []}
+            header = split_line(session_lines[header_idx])
+            data_lines = session_lines[header_idx + 1:]
             
             sessions = []
             client_ips = set()
@@ -218,12 +226,11 @@ class ProxyMonitor:
                             session[column] = data[i] if i < len(data) else ''
                         sessions.append(session)
                         
-                        # Client IP 추출
-                        client_ip = session.get('Client IP', '')
-                        if client_ip and ':' in client_ip:
-                            ip = client_ip.split(':')[0]
-                            client_ips.add(ip)
-                            
+                        # Client IP 추출 (포트 구분자 ':' 제거)
+                        client_ip = (session.get('Client IP') or '').strip()
+                        if client_ip:
+                            client_ips.add(client_ip.split(':')[0])
+                        
                 except Exception as e:
                     logger.error(f"세션 데이터 파싱 오류: {e}")
                     continue
