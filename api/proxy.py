@@ -263,7 +263,7 @@ def test_proxy_connection(proxy_id):
 def get_proxy_info(proxy_id):
     """프록시 시스템 정보 조회"""
     try:
-        info = proxy_manager.get_proxy_system_info(proxy_id)
+        info = device_manager.get_system_info(proxy_id)
         return jsonify(info)
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -272,7 +272,7 @@ def get_proxy_info(proxy_id):
 def get_proxy_resources(proxy_id):
     """프록시 리소스 사용량 조회"""
     try:
-        resources = proxy_manager.get_proxy_resource_usage(proxy_id)
+        resources = device_manager.get_resource_usage(proxy_id)
         return jsonify(resources)
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -281,7 +281,7 @@ def get_proxy_resources(proxy_id):
 def get_proxy_services(proxy_id):
     """프록시 서비스 상태 조회"""
     try:
-        services = proxy_manager.check_proxy_services(proxy_id)
+        services = device_manager.check_services(proxy_id)
         return jsonify(services)
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -296,7 +296,7 @@ def execute_proxy_command(proxy_id):
         if not command:
             return jsonify({'error': '명령어가 필요합니다.'}), 400
         
-        result = proxy_manager.execute_command_on_proxy(proxy_id, command)
+        result = device_manager.execute_command(proxy_id, command)
         return jsonify(result)
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -307,8 +307,7 @@ def execute_proxy_command(proxy_id):
 def start_monitoring():
     """자동 모니터링 시작"""
     try:
-        proxy_manager.start_monitoring()
-        return jsonify({'message': '모니터링이 시작되었습니다.'})
+        return jsonify({'message': '프론트에서 제어'})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -316,8 +315,7 @@ def start_monitoring():
 def stop_monitoring():
     """자동 모니터링 중지"""
     try:
-        proxy_manager.stop_monitoring()
-        return jsonify({'message': '모니터링이 중지되었습니다.'})
+        return jsonify({'message': '프론트에서 제어'})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -325,7 +323,6 @@ def stop_monitoring():
 def get_monitoring_status():
     """모니터링 상태 조회"""
     try:
-        status = proxy_manager.get_monitoring_status()
-        return jsonify(status)
+        return jsonify({'active': False})
     except Exception as e:
         return jsonify({'error': str(e)}), 500

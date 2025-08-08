@@ -41,5 +41,29 @@ class DeviceManager:
             return {'success': False, 'error': '프록시 클라이언트가 없습니다.'}
         return client.execute_command(command)
 
+    def get_system_info(self, proxy_id: int) -> Dict[str, Any]:
+        client = self.clients.get(proxy_id)
+        if not client:
+            return {'error': '프록시 클라이언트가 없습니다.'}
+        info = client.get_system_info()
+        client.disconnect()
+        return info
+
+    def get_resource_usage(self, proxy_id: int) -> Dict[str, Any]:
+        client = self.clients.get(proxy_id)
+        if not client:
+            return {'error': '프록시 클라이언트가 없습니다.'}
+        usage = client.get_resource_usage()
+        client.disconnect()
+        return usage
+
+    def check_services(self, proxy_id: int) -> Dict[str, Any]:
+        client = self.clients.get(proxy_id)
+        if not client:
+            return {'error': '프록시 클라이언트가 없습니다.'}
+        status = client.check_proxy_status()
+        client.disconnect()
+        return status
+
 # 전역 인스턴스
 device_manager = DeviceManager()
