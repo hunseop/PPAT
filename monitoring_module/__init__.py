@@ -1,17 +1,14 @@
-"""모니터링 모듈
+"""통합 모니터링 모듈
 
-시스템 리소스 모니터링 기능을 제공합니다.
+프록시 서버의 연결 테스트, 상태 확인, 리소스 모니터링을 통합 제공합니다.
 """
 
-from .config import Config as MonitoringConfig
-from .resource import ResourceMonitor
-from .session import SessionManager
-from .utils import format_bytes, parse_size
+from .monitor import ProxyMonitor
+from .utils import format_bytes, parse_size, get_current_timestamp
 
 __all__ = [
-    'MonitoringConfig',
-    'ResourceMonitor',
-    'SessionManager',
-    'format_bytes',
-    'parse_size'
+    'ProxyMonitor',
+    'format_bytes', 
+    'parse_size',
+    'get_current_timestamp'
 ]

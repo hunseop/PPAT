@@ -15,18 +15,25 @@ class ProxyGroup(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
-    # 관계
-    proxies = db.relationship('ProxyServer', backref='group', lazy=True, cascade='all, delete-orphan')
+    # 관계 설정
+    servers = db.relationship('ProxyServer', backref='group', lazy=True, cascade='all, delete-orphan')
     
     def to_dict(self):
+        # 메인 서버 찾기
+        main_server = None
+        for server in self.servers:
+            if server.is_main:
+                main_server = server.name
+                break
+        
         return {
             'id': self.id,
             'name': self.name,
             'description': self.description,
+            'proxy_count': len(self.servers),
+            'main_server': main_server,
             'created_at': self.created_at.isoformat() if self.created_at else None,
-            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
-            'proxy_count': len(self.proxies),
-            'main_proxy_count': len([p for p in self.proxies if p.is_main])
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None
         }
 
 class ProxyServer(db.Model):
@@ -35,19 +42,19 @@ class ProxyServer(db.Model):
     
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
-    host = db.Column(db.String(255), nullable=False)
+    host = db.Column(db.String(45), nullable=False)  # IPv4/IPv6 지원
     ssh_port = db.Column(db.Integer, default=22)
     snmp_port = db.Column(db.Integer, default=161)
-    username = db.Column(db.String(100), default='root')
-    password = db.Column(db.String(255), default='123456')  # 실제 환경에서는 암호화 필요
-    is_main = db.Column(db.Boolean, default=False)
-    is_active = db.Column(db.Boolean, default=True)
+    snmp_version = db.Column(db.String(10), default='v2c')  # SNMP 버전
+    snmp_community = db.Column(db.String(100), default='public')  # 커뮤니티 스트링
+    username = db.Column(db.String(50), default='root')
+    password = db.Column(db.String(255))  # 암호화 저장 권장
     description = db.Column(db.Text)
+    is_active = db.Column(db.Boolean, default=False)
+    is_main = db.Column(db.Boolean, default=False)  # 메인 클러스터 여부
+    group_id = db.Column(db.Integer, db.ForeignKey('proxy_groups.id'), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    
-    # 외래키
-    group_id = db.Column(db.Integer, db.ForeignKey('proxy_groups.id'), nullable=False)
     
     def to_dict(self):
         return {
@@ -56,74 +63,56 @@ class ProxyServer(db.Model):
             'host': self.host,
             'ssh_port': self.ssh_port,
             'snmp_port': self.snmp_port,
+            'snmp_version': self.snmp_version,
+            'snmp_community': self.snmp_community,
             'username': self.username,
-            'is_main': self.is_main,
-            'is_active': self.is_active,
             'description': self.description,
+            'is_active': self.is_active,
+            'is_main': self.is_main,
             'group_id': self.group_id,
             'group_name': self.group.name if self.group else None,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None
         }
 
-class ResourceStat(db.Model):
-    """리소스 통계 모델"""
-    __tablename__ = 'resource_stats'
+class MonitoringConfig(db.Model):
+    """모니터링 설정 모델"""
+    __tablename__ = 'monitoring_configs'
     
     id = db.Column(db.Integer, primary_key=True)
-    proxy_id = db.Column(db.Integer, db.ForeignKey('proxy_servers.id'), nullable=False)
-    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
-    cpu_usage = db.Column(db.Float)
-    memory_usage = db.Column(db.Float)
-    disk_usage = db.Column(db.Float)
-    network_in = db.Column(db.Float)
-    network_out = db.Column(db.Float)
-    session_count = db.Column(db.Integer)
-    status = db.Column(db.String(20), default='online')  # online, offline, error
+    name = db.Column(db.String(100), nullable=False, unique=True)
+    description = db.Column(db.Text)
     
-    # 관계
-    proxy = db.relationship('ProxyServer', backref='resource_stats')
+    # SNMP 설정
+    snmp_oids = db.Column(db.JSON)  # JSON 형태로 OID 저장
+    
+    # 세션 명령어
+    session_cmd = db.Column(db.Text)
+    
+    # 임계값 설정
+    cpu_threshold = db.Column(db.Integer, default=80)
+    memory_threshold = db.Column(db.Integer, default=80)
+    
+    # 모니터링 주기 설정
+    default_interval = db.Column(db.Integer, default=30)  # 초
+    
+    # 활성화 여부
+    is_active = db.Column(db.Boolean, default=True)
+    
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     def to_dict(self):
         return {
             'id': self.id,
-            'proxy_id': self.proxy_id,
-            'proxy_name': self.proxy.name if self.proxy else None,
-            'timestamp': self.timestamp.isoformat() if self.timestamp else None,
-            'cpu_usage': self.cpu_usage,
-            'memory_usage': self.memory_usage,
-            'disk_usage': self.disk_usage,
-            'network_in': self.network_in,
-            'network_out': self.network_out,
-            'session_count': self.session_count,
-            'status': self.status
-        }
-
-class SessionInfo(db.Model):
-    """세션 정보 모델"""
-    __tablename__ = 'session_info'
-    
-    id = db.Column(db.Integer, primary_key=True)
-    proxy_id = db.Column(db.Integer, db.ForeignKey('proxy_servers.id'), nullable=False)
-    client_ip = db.Column(db.String(45))  # IPv6 지원
-    username = db.Column(db.String(255))
-    url = db.Column(db.Text)
-    protocol = db.Column(db.String(10))
-    status = db.Column(db.String(20))
-    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
-    
-    # 관계
-    proxy = db.relationship('ProxyServer', backref='sessions')
-    
-    def to_dict(self):
-        return {
-            'id': self.id,
-            'proxy_id': self.proxy_id,
-            'proxy_name': self.proxy.name if self.proxy else None,
-            'client_ip': self.client_ip,
-            'username': self.username,
-            'url': self.url,
-            'protocol': self.protocol,
-            'status': self.status,
-            'timestamp': self.timestamp.isoformat() if self.timestamp else None
+            'name': self.name,
+            'description': self.description,
+            'snmp_oids': self.snmp_oids,
+            'session_cmd': self.session_cmd,
+            'cpu_threshold': self.cpu_threshold,
+            'memory_threshold': self.memory_threshold,
+            'default_interval': self.default_interval,
+            'is_active': self.is_active,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None
         }

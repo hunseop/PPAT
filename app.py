@@ -1,10 +1,7 @@
-"""프록시 모니터링 & 정책 관리 시스템 메인 애플리케이션"""
+"""프록시 모니터링 시스템 메인 애플리케이션"""
 
-from flask import Flask, render_template
-from flask_socketio import SocketIO
+from flask import Flask, send_from_directory, render_template
 import os
-
-socketio = SocketIO()
 
 def create_app():
     """Flask 애플리케이션 팩토리"""
@@ -12,48 +9,78 @@ def create_app():
     
     # 설정
     app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key')
-    app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///ppat.db')
+    app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///proxy_monitoring.db')
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
     
-    # models.py에서 db 가져오기
+    # 데이터베이스 초기화
     from models import db
-    
-    # 확장 초기화
     db.init_app(app)
-    socketio.init_app(app, cors_allowed_origins="*")
     
     # 블루프린트 등록
     from api.proxy import proxy_bp
     from api.monitoring import monitoring_bp
-    
     app.register_blueprint(proxy_bp, url_prefix='/api')
-    app.register_blueprint(monitoring_bp, url_prefix='/api')
+    app.register_blueprint(monitoring_bp, url_prefix='/api/monitoring')
     
     # 메인 라우트
     @app.route('/')
     def index():
-        return app.send_static_file('index.html')
+        return render_template('index.html')
     
-    # 모델 임포트 (테이블 생성을 위해)
-    from models import ProxyGroup, ProxyServer, ResourceStat, SessionInfo
-    
-    # Socket.IO 이벤트 핸들러
-    @socketio.on('connect')
-    def handle_connect():
-        print('🔌 클라이언트 연결됨')
-    
-    @socketio.on('disconnect')
-    def handle_disconnect():
-        print('🔌 클라이언트 연결 해제됨')
+    # 정적 파일 라우트 (CSS, JS 등)
+    @app.route('/static/<path:filename>')
+    def static_files(filename):
+        return send_from_directory('static', filename)
     
     # 데이터베이스 테이블 생성
     with app.app_context():
         db.create_all()
+        
+        # 기본 그룹 생성
+        from models import ProxyGroup, MonitoringConfig
+        default_group = ProxyGroup.query.filter_by(name='기본그룹').first()
+        if not default_group:
+            default_group = ProxyGroup(
+                name='기본그룹',
+                description='기본 프록시 그룹'
+            )
+            db.session.add(default_group)
+        
+        # 기본 모니터링 설정 생성
+        default_config = MonitoringConfig.query.filter_by(name='기본설정').first()
+        if not default_config:
+            default_config = MonitoringConfig(
+                name='기본설정',
+                description='기본 모니터링 설정',
+                snmp_oids={
+                    'CPU': '1.3.6.1.2.1.25.3.3.1.2.1',
+                    'Memory': '1.3.6.1.2.1.25.2.2.1.1',
+                    'CC': '1.3.6.1.2.1.25.4.2.1.2',
+                    'CS': '1.3.6.1.2.1.25.4.2.1.3',
+                    'HTTP': '1.3.6.1.2.1.25.4.2.1.2',
+                    'HTTPS': '1.3.6.1.2.1.25.4.2.1.3',
+                    'FTP': '1.3.6.1.2.1.25.4.2.1.4'
+                },
+                session_cmd="""/opt/mwg/bin/mwg-core -S connections | awk -F " \\\\\\| " '{print $2" | "$5" | "$6" | "$7" | "$18" | "$10" | "$11" | "$15"}'""",
+                cpu_threshold=80,
+                memory_threshold=80,
+                default_interval=30,
+                is_active=True
+            )
+            db.session.add(default_config)
+        
+        db.session.commit()
     
     return app
 
 if __name__ == '__main__':
     app = create_app()
-    print(f"🚀 서버 시작: http://127.0.0.1:5007")
-    print(f"🌐 외부 접속: http://0.0.0.0:5007 (실제 접속은 http://127.0.0.1:5007 또는 http://localhost:5007)")
-    socketio.run(app, debug=True, host='0.0.0.0', port=5007)
+    
+    # 프록시 매니저 초기화 (앱 생성 후)
+    with app.app_context():
+        from proxy_module.proxy_manager import proxy_manager
+        proxy_manager.reload_proxies()
+    
+    print(f"🚀 프록시 모니터링 시스템 시작")
+    print(f"🌐 접속 주소: http://127.0.0.1:5007")
+    app.run(debug=True, host='0.0.0.0', port=5007)

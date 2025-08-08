@@ -1,461 +1,867 @@
-// Vue.js 애플리케이션
-const { createApp } = Vue;
+// 프록시 모니터링 시스템 - 관리 페이지 (PPAT)
 
-createApp({
-    data() {
-        return {
-            // 현재 탭
-            currentTab: 'dashboard',
-            
-            // 데이터
-            groups: [],
-            servers: [],
-            resources: [],
-            sessions: [],
-            latestResources: [],
-            
-            // 모니터링 상태
-            monitoringStatus: {
-                active: false,
-                interval: 5
-            },
-            monitoringInterval: 5,
-            
-            // 필터 및 검색
-            selectedGroupId: '',
-            selectedGroupIdForMonitoring: '',
-            selectedProxyIdForSessions: '',
-            sessionSearch: '',
-            
-            // 모달 상태
-            showGroupModal: false,
-            showServerModal: false,
-            showSessionStats: false,
-            
-            // 폼 데이터
-            groupForm: {
-                name: '',
-                description: ''
-            },
-            serverForm: {
-                name: '',
-                host: '',
-                group_id: '',
-                username: 'root',
-                password: '123456',
-                ssh_port: 22,
-                snmp_port: 161,
-                is_main: false,
-                is_active: true,
-                description: ''
-            },
-            
-            // 편집 상태
-            editingGroup: null,
-            editingServer: null,
-            
-            // 임계값
-            thresholds: {
-                cpu: 80,
-                memory: 85,
-                disk: 90,
-                network_in: 1000,
-                network_out: 1000
-            },
-            
-            // 세션 통계
-            sessionStats: {
-                by_ip: [],
-                by_proxy: [],
-                by_url: []
-            },
-            
-            // Socket.IO
-            socket: null
-        }
-    },
+let proxies = [];
+let groups = []; // New: Array to store proxy groups
+let resources = []; // New: Array to store resource data
+let editingProxy = null;
+let editingGroup = null; // New: Variable for editing group
+let modal = null;
+let groupModal = null; // New: Bootstrap modal instance for groups
+let currentTab = 'management'; // 현재 활성 탭
+
+// 모니터링 관련 변수
+let monitoringInterval = null;
+let monitoringIntervalTime = 30; // 기본 30초
+let isMonitoringActive = false;
+let nextUpdateTimeout = null;
+
+// DOM 로드 완료 후 초기화
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('PPAT 시스템 초기화 중...');
     
-    computed: {
-        // 대시보드 통계
-        totalProxies() {
-            return this.servers.length;
-        },
-        onlineProxies() {
-            return this.latestResources.filter(r => r.status === 'online').length;
-        },
-        totalSessions() {
-            return this.latestResources.reduce((sum, r) => sum + (r.session_count || 0), 0);
-        },
-        totalGroups() {
-            return this.groups.length;
-        },
-        
-        // 필터된 서버 목록
-        filteredServers() {
-            if (!this.selectedGroupId) return this.servers;
-            return this.servers.filter(server => server.group_id == this.selectedGroupId);
-        },
-        
-        // 필터된 리소스 목록
-        filteredResources() {
-            if (!this.selectedGroupIdForMonitoring) return this.latestResources;
-            const groupProxyIds = this.servers
-                .filter(s => s.group_id == this.selectedGroupIdForMonitoring)
-                .map(s => s.id);
-            return this.latestResources.filter(r => groupProxyIds.includes(r.proxy_id));
-        }
-    },
+    // Bootstrap 모달 초기화
+    modal = new bootstrap.Modal(document.getElementById('proxyModal'));
+    groupModal = new bootstrap.Modal(document.getElementById('groupModal')); // New: Initialize group modal
     
-    methods: {
-        // 초기화
-        async init() {
-            await Promise.all([
-                this.loadGroups(),
-                this.loadServers(),
-                this.loadMonitoringStatus(),
-                this.loadLatestResources(),
-                this.loadThresholds()
-            ]);
-            
-            this.initSocket();
-        },
-        
-        // Socket.IO 초기화
-        initSocket() {
-            this.socket = io({
-                transports: ['websocket', 'polling']
-            });
-            
-            this.socket.on('resource_update', (data) => {
-                // 실시간 리소스 업데이트
-                const index = this.latestResources.findIndex(r => r.proxy_id === data.proxy_id);
-                if (index >= 0) {
-                    this.latestResources[index] = {
-                        ...this.latestResources[index],
-                        ...data.data,
-                        proxy_name: data.proxy_name,
-                        timestamp: data.timestamp
-                    };
-                } else {
-                    this.latestResources.push({
-                        proxy_id: data.proxy_id,
-                        proxy_name: data.proxy_name,
-                        timestamp: data.timestamp,
-                        ...data.data
-                    });
-                }
-            });
-        },
-        
-        // API 호출 헬퍼
-        async apiCall(url, options = {}) {
-            try {
-                const response = await fetch(url, {
-                    headers: {
-                        'Content-Type': 'application/json',
-                        ...options.headers
-                    },
-                    ...options
-                });
-                
-                if (!response.ok) {
-                    const error = await response.json();
-                    throw new Error(error.error || `HTTP ${response.status}`);
-                }
-                
-                return await response.json();
-            } catch (error) {
-                console.error('API 호출 오류:', error);
-                alert(`오류: ${error.message}`);
-                throw error;
-            }
-        },
-        
-        // 데이터 로딩
-        async loadGroups() {
-            this.groups = await this.apiCall('/api/groups');
-        },
-        
-        async loadServers() {
-            this.servers = await this.apiCall('/api/servers');
-        },
-        
-        async loadMonitoringStatus() {
-            this.monitoringStatus = await this.apiCall('/api/monitoring/status');
-            this.monitoringInterval = this.monitoringStatus.interval;
-        },
-        
-        async loadLatestResources() {
-            this.latestResources = await this.apiCall('/api/monitoring/resources/latest');
-        },
-        
-        async loadThresholds() {
-            this.thresholds = await this.apiCall('/api/monitoring/thresholds');
-        },
-        
-        // 그룹 관리
-        async saveGroup() {
-            try {
-                if (this.editingGroup) {
-                    await this.apiCall(`/api/groups/${this.editingGroup.id}`, {
-                        method: 'PUT',
-                        body: JSON.stringify(this.groupForm)
-                    });
-                } else {
-                    await this.apiCall('/api/groups', {
-                        method: 'POST',
-                        body: JSON.stringify(this.groupForm)
-                    });
-                }
-                
-                this.closeGroupModal();
-                await this.loadGroups();
-            } catch (error) {
-                // 에러는 apiCall에서 처리됨
-            }
-        },
-        
-        editGroup(group) {
-            this.editingGroup = group;
-            this.groupForm = {
-                name: group.name,
-                description: group.description || ''
-            };
-            this.showGroupModal = true;
-        },
-        
-        async deleteGroup(groupId) {
-            if (!confirm('정말로 이 그룹을 삭제하시겠습니까?')) return;
-            
-            try {
-                await this.apiCall(`/api/groups/${groupId}`, {
-                    method: 'DELETE'
-                });
-                await this.loadGroups();
-            } catch (error) {
-                // 에러는 apiCall에서 처리됨
-            }
-        },
-        
-        closeGroupModal() {
-            this.showGroupModal = false;
-            this.editingGroup = null;
-            this.groupForm = {
-                name: '',
-                description: ''
-            };
-        },
-        
-        // 서버 관리
-        async saveServer() {
-            try {
-                if (this.editingServer) {
-                    await this.apiCall(`/api/servers/${this.editingServer.id}`, {
-                        method: 'PUT',
-                        body: JSON.stringify(this.serverForm)
-                    });
-                } else {
-                    await this.apiCall('/api/servers', {
-                        method: 'POST',
-                        body: JSON.stringify(this.serverForm)
-                    });
-                }
-                
-                this.closeServerModal();
-                await this.loadServers();
-            } catch (error) {
-                // 에러는 apiCall에서 처리됨
-            }
-        },
-        
-        editServer(server) {
-            this.editingServer = server;
-            this.serverForm = {
-                name: server.name,
-                host: server.host,
-                group_id: server.group_id,
-                username: server.username,
-                password: '123456', // 보안상 실제 비밀번호는 표시하지 않음
-                ssh_port: server.ssh_port,
-                snmp_port: server.snmp_port,
-                is_main: server.is_main,
-                is_active: server.is_active,
-                description: server.description || ''
-            };
-            this.showServerModal = true;
-        },
-        
-        async deleteServer(serverId) {
-            if (!confirm('정말로 이 서버를 삭제하시겠습니까?')) return;
-            
-            try {
-                await this.apiCall(`/api/servers/${serverId}`, {
-                    method: 'DELETE'
-                });
-                await this.loadServers();
-            } catch (error) {
-                // 에러는 apiCall에서 처리됨
-            }
-        },
-        
-        async testConnection(serverId) {
-            try {
-                const result = await this.apiCall(`/api/servers/${serverId}/test`, {
-                    method: 'POST'
-                });
-                alert(result.message);
-            } catch (error) {
-                // 에러는 apiCall에서 처리됨
-            }
-        },
-        
-        closeServerModal() {
-            this.showServerModal = false;
-            this.editingServer = null;
-            this.serverForm = {
-                name: '',
-                host: '',
-                group_id: '',
-                username: 'root',
-                password: '123456',
-                ssh_port: 22,
-                snmp_port: 161,
-                is_main: false,
-                is_active: true,
-                description: ''
-            };
-        },
-        
-        // 모니터링 관리
-        async toggleMonitoring() {
-            try {
-                if (this.monitoringStatus.active) {
-                    await this.apiCall('/api/monitoring/stop', { method: 'POST' });
-                } else {
-                    await this.apiCall('/api/monitoring/start', { method: 'POST' });
-                }
-                await this.loadMonitoringStatus();
-            } catch (error) {
-                // 에러는 apiCall에서 처리됨
-            }
-        },
-        
-        async updateInterval() {
-            try {
-                await this.apiCall('/api/monitoring/interval', {
-                    method: 'PUT',
-                    body: JSON.stringify({ interval: this.monitoringInterval })
-                });
-                await this.loadMonitoringStatus();
-            } catch (error) {
-                // 에러는 apiCall에서 처리됨
-            }
-        },
-        
-        // 세션 관리
-        async searchSessions() {
-            try {
-                const params = new URLSearchParams();
-                if (this.selectedProxyIdForSessions) {
-                    params.append('proxy_id', this.selectedProxyIdForSessions);
-                }
-                if (this.sessionSearch) {
-                    params.append('search', this.sessionSearch);
-                }
-                
-                this.sessions = await this.apiCall(`/api/monitoring/sessions?${params}`);
-            } catch (error) {
-                // 에러는 apiCall에서 처리됨
-            }
-        },
-        
-        async loadSessionStats() {
-            try {
-                this.sessionStats = await this.apiCall('/api/monitoring/sessions/stats');
-                this.showSessionStats = true;
-            } catch (error) {
-                // 에러는 apiCall에서 처리됨
-            }
-        },
-        
-        // 유틸리티 함수
-        formatDateTime(dateStr) {
-            if (!dateStr) return '-';
-            const date = new Date(dateStr);
-            return date.toLocaleString('ko-KR');
-        },
-        
-        formatDate(dateStr) {
-            if (!dateStr) return '-';
-            const date = new Date(dateStr);
-            return date.toLocaleDateString('ko-KR');
-        },
-        
-        formatBytes(bytes) {
-            if (!bytes) return '0 B';
-            const sizes = ['B', 'KB', 'MB', 'GB'];
-            const i = Math.floor(Math.log(bytes) / Math.log(1024));
-            return Math.round(bytes / Math.pow(1024, i) * 100) / 100 + ' ' + sizes[i];
-        },
-        
-        getStatusClass(status) {
-            switch (status) {
-                case 'online': return 'bg-success';
-                case 'offline': return 'bg-danger';
-                case 'warning': return 'bg-warning';
-                default: return 'bg-secondary';
-            }
-        },
-        
-        getProgressClass(value, threshold) {
-            if (value >= threshold) return 'bg-danger';
-            if (value >= threshold * 0.8) return 'bg-warning';
-            return 'bg-success';
-        },
-        
-        hasAlert(stat) {
-            return stat.cpu_usage >= this.thresholds.cpu ||
-                   stat.memory_usage >= this.thresholds.memory ||
-                   stat.disk_usage >= this.thresholds.disk;
-        }
-    },
+    // 초기 데이터 로드
+    loadGroups(); // New: Load groups on startup
+    loadProxies();
     
-    watch: {
-        // 탭 변경 시 데이터 새로고침
-        currentTab(newTab) {
-            switch (newTab) {
-                case 'dashboard':
-                    this.loadLatestResources();
-                    break;
-                case 'proxy':
-                    this.loadGroups();
-                    this.loadServers();
-                    break;
-                case 'monitoring':
-                    this.loadLatestResources();
-                    break;
-                case 'sessions':
-                    this.searchSessions();
-                    break;
-            }
-        },
-        
-        // 세션 통계 모달 열릴 때 데이터 로드
-        showSessionStats(show) {
-            if (show) {
-                this.loadSessionStats();
-            }
+    // 관리 탭은 주기적 업데이트 (30초마다)
+    setInterval(() => {
+        if (currentTab === 'management') {
+            loadProxies();
+            loadGroups();
         }
-    },
+    }, 30000);
+});
+
+// 탭 전환 함수
+function showTab(tabName) {
+    console.log(`탭 전환: ${tabName}`);
     
-    mounted() {
-        this.init();
-        
-        // 주기적으로 데이터 갱신
-        setInterval(() => {
-            if (this.currentTab === 'dashboard' || this.currentTab === 'monitoring') {
-                this.loadLatestResources();
-            }
-        }, 30000); // 30초마다
+    // 모든 탭 숨기기
+    document.getElementById('managementTab').style.display = 'none';
+    document.getElementById('resourcesTab').style.display = 'none';
+    
+    // 네비게이션 활성 클래스 제거
+    document.querySelectorAll('.nav-link').forEach(link => {
+        link.classList.remove('active');
+    });
+    
+    // 선택된 탭 표시
+    if (tabName === 'management') {
+        document.getElementById('managementTab').style.display = 'block';
+        document.querySelector('a[onclick="showTab(\'management\')"]').classList.add('active');
+        loadGroups();
+        loadProxies();
+    } else if (tabName === 'resources') {
+        document.getElementById('resourcesTab').style.display = 'block';
+        document.querySelector('a[onclick="showTab(\'resources\')"]').classList.add('active');
+        loadResourcesData();
+        loadMonitoringSummary();
     }
-}).mount('#app');
+    
+    currentTab = tabName;
+}
+
+// ==================== 프록시 그룹 관리 ====================
+
+// 프록시 그룹 목록 로드
+async function loadGroups() {
+    console.log('프록시 그룹 로딩 시작...');
+    try {
+        const response = await fetch('/api/groups');
+        console.log('Groups response status:', response.status);
+        
+        if (response.ok) {
+            groups = await response.json();
+            console.log('로드된 그룹 수:', groups.length);
+            updateGroupTable();
+            updateGroupSelect();
+        } else {
+            const errorText = await response.text();
+            console.error('그룹 API 오류:', response.status, errorText);
+            showNotification(`그룹 목록을 불러오는데 실패했습니다. (${response.status})`, 'danger');
+        }
+    } catch (error) {
+        console.error('그룹 목록 로딩 오류:', error);
+        showNotification('그룹 네트워크 오류: ' + error.message, 'danger');
+    }
+}
+
+// 그룹 테이블 업데이트
+function updateGroupTable() {
+    console.log('그룹 테이블 업데이트 중...');
+    const tbody = document.getElementById('groupTableBody');
+    
+    if (groups.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-4">등록된 그룹이 없습니다</td></tr>';
+        return;
+    }
+    
+    tbody.innerHTML = groups.map(group => `
+        <tr>
+            <td class="ps-3">
+                <strong>${group.name}</strong>
+                ${group.name === '기본그룹' ? '<span class="badge bg-info ms-2 small">기본</span>' : ''}
+            </td>
+            <td><small class="text-muted">${group.description || '-'}</small></td>
+            <td>
+                <span class="badge bg-light text-dark">${group.proxy_count || 0}대</span>
+            </td>
+            <td>
+                ${group.main_server ? `<span class="badge bg-warning text-dark">${group.main_server}</span>` : '<span class="text-muted small">미지정</span>'}
+            </td>
+            <td class="text-center">
+                <div class="btn-group btn-group-sm">
+                    <button class="btn btn-outline-primary btn-sm" 
+                            onclick="editGroup(${group.id})"
+                            title="수정">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                    ${group.name !== '기본그룹' ? `
+                        <button class="btn btn-outline-danger btn-sm" 
+                                onclick="deleteGroup(${group.id})"
+                                title="삭제">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    ` : ''}
+                </div>
+            </td>
+        </tr>
+    `).join('');
+    console.log('그룹 테이블 업데이트 완료');
+}
+
+// 그룹 선택 드롭다운 업데이트
+function updateGroupSelect() {
+    const select = document.getElementById('proxyGroup');
+    select.innerHTML = '<option value="">그룹을 선택하세요</option>';
+    
+    groups.forEach(group => {
+        const option = document.createElement('option');
+        option.value = group.id;
+        option.textContent = group.name;
+        select.appendChild(option);
+    });
+}
+
+// 그룹 모달 표시
+function showGroupModal() {
+    console.log('그룹 모달 표시');
+    editingGroup = null;
+    document.getElementById('groupModalTitle').textContent = '프록시 그룹 추가';
+    clearGroupForm();
+    groupModal.show();
+}
+
+// 그룹 모달 닫기
+function closeGroupModal() {
+    console.log('그룹 모달 닫기');
+    groupModal.hide();
+    editingGroup = null;
+    clearGroupForm();
+}
+
+// 그룹 폼 초기화
+function clearGroupForm() {
+    document.getElementById('groupName').value = '';
+    document.getElementById('groupDescription').value = '';
+}
+
+// 그룹 저장
+async function saveGroup() {
+    console.log('그룹 저장 시작');
+    const name = document.getElementById('groupName').value.trim();
+    
+    console.log('그룹 입력값:', { name });
+    
+    if (!name) {
+        showNotification('그룹 이름은 필수 항목입니다.', 'warning');
+        return;
+    }
+    
+    const saveButton = document.getElementById('saveGroupButton');
+    const originalText = saveButton.innerHTML;
+    saveButton.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>저장중...';
+    saveButton.disabled = true;
+    
+    try {
+        const data = {
+            name: name,
+            description: document.getElementById('groupDescription').value
+        };
+        
+        const method = editingGroup ? 'PUT' : 'POST';
+        const url = editingGroup ? `/api/groups/${editingGroup.id}` : '/api/groups';
+        
+        console.log('그룹 요청 데이터:', data);
+        console.log('그룹 요청 URL:', url, 'Method:', method);
+        
+        const response = await fetch(url, {
+            method: method,
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(data)
+        });
+        
+        console.log('그룹 응답 상태:', response.status);
+        
+        if (response.ok) {
+            const result = await response.json();
+            console.log('그룹 저장 성공:', result);
+            await loadGroups();
+            closeGroupModal();
+            showNotification(
+                editingGroup ? '그룹이 수정되었습니다.' : '그룹이 추가되었습니다.', 
+                'success'
+            );
+        } else {
+            const errorText = await response.text();
+            console.error('그룹 서버 오류:', response.status, errorText);
+            
+            let errorMessage = '알 수 없는 오류';
+            try {
+                const error = JSON.parse(errorText);
+                errorMessage = error.message || error.error || errorText;
+            } catch {
+                errorMessage = errorText;
+            }
+            
+            showNotification('그룹 저장 실패: ' + errorMessage, 'danger');
+        }
+    } catch (error) {
+        console.error('그룹 저장 오류:', error);
+        showNotification('그룹 저장 중 오류: ' + error.message, 'danger');
+    } finally {
+        saveButton.innerHTML = originalText;
+        saveButton.disabled = false;
+    }
+}
+
+// 그룹 수정
+function editGroup(groupId) {
+    editingGroup = groups.find(g => g.id === groupId);
+    if (!editingGroup) return;
+    
+    document.getElementById('groupModalTitle').textContent = '프록시 그룹 수정';
+    document.getElementById('groupName').value = editingGroup.name;
+    document.getElementById('groupDescription').value = editingGroup.description || '';
+    
+    groupModal.show();
+}
+
+// 그룹 삭제
+async function deleteGroup(groupId) {
+    const group = groups.find(g => g.id === groupId);
+    if (!group) return;
+    
+    if (group.name === '기본그룹') {
+        showNotification('기본 그룹은 삭제할 수 없습니다.', 'warning');
+        return;
+    }
+    
+    if (!confirm(`정말로 "${group.name}" 그룹을 삭제하시겠습니까?`)) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/groups/${groupId}`, {
+            method: 'DELETE'
+        });
+        
+        if (response.ok) {
+            await loadGroups();
+            await loadProxies(); // 프록시 목록도 갱신
+            showNotification('그룹이 삭제되었습니다.', 'success');
+        } else {
+            const error = await response.json();
+            showNotification('삭제 실패: ' + (error.message || error.error), 'danger');
+        }
+    } catch (error) {
+        console.error('그룹 삭제 오류:', error);
+        showNotification('그룹 삭제 중 오류가 발생했습니다.', 'danger');
+    }
+}
+
+// ==================== 프록시 서버 관리 ====================
+
+// 프록시 목록 로드
+async function loadProxies() {
+    console.log('프록시 목록 로딩 시작...');
+    try {
+        const response = await fetch('/api/proxies');
+        console.log('Proxies response status:', response.status);
+        
+        if (response.ok) {
+            proxies = await response.json();
+            console.log('로드된 프록시 수:', proxies.length);
+            updateProxyTable();
+        } else {
+            const errorText = await response.text();
+            console.error('프록시 API 오류:', response.status, errorText);
+            showNotification(`프록시 목록을 불러오는데 실패했습니다. (${response.status})`, 'danger');
+        }
+    } catch (error) {
+        console.error('프록시 목록 로딩 오류:', error);
+        showNotification('프록시 네트워크 오류: ' + error.message, 'danger');
+    }
+}
+
+// 프록시 테이블 업데이트 (PRD 기준: Main/Cluster Appliance 구분)
+function updateProxyTable() {
+    console.log('프록시 테이블 업데이트 중...');
+    const tbody = document.getElementById('proxyTableBody');
+    const emptyMessage = document.getElementById('emptyMessage');
+    
+    if (proxies.length === 0) {
+        tbody.innerHTML = '';
+        emptyMessage.style.display = 'block';
+        return;
+    }
+    
+    emptyMessage.style.display = 'none';
+    
+    tbody.innerHTML = proxies.map(proxy => `
+        <tr>
+            <td class="ps-3">
+                <strong>${proxy.name}</strong>
+                <br><small class="text-muted">${proxy.description || ''}</small>
+            </td>
+            <td>
+                <code class="text-primary">${proxy.host}</code>
+                <br><small class="text-muted">SSH: ${proxy.ssh_port} | SNMP: ${proxy.snmp_port}</small>
+            </td>
+            <td>
+                <span class="badge bg-light text-dark">${proxy.group_name || '미지정'}</span>
+            </td>
+            <td>
+                ${proxy.is_main ? 
+                    '<span class="badge bg-warning text-dark">메인</span>' : 
+                    '<span class="badge bg-secondary">클러스터</span>'
+                }
+            </td>
+            <td>
+                <span class="badge ${proxy.is_active ? 'bg-success' : 'bg-secondary'}">
+                    ${proxy.is_active ? '온라인' : '오프라인'}
+                </span>
+            </td>
+            <td class="text-center">
+                <div class="btn-group btn-group-sm">
+                    <button class="btn btn-outline-info btn-sm" 
+                            onclick="testConnection(${proxy.id})" 
+                            id="testBtn-${proxy.id}"
+                            title="연결 테스트">
+                        <i class="fas fa-plug"></i>
+                    </button>
+                    <button class="btn btn-outline-primary btn-sm" 
+                            onclick="editProxy(${proxy.id})"
+                            title="수정">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                    <button class="btn btn-outline-danger btn-sm" 
+                            onclick="deleteProxy(${proxy.id})"
+                            title="삭제">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+            </td>
+        </tr>
+    `).join('');
+    console.log('프록시 테이블 업데이트 완료');
+}
+
+// 프록시 모달 표시
+function showModal() {
+    console.log('프록시 모달 표시');
+    editingProxy = null;
+    document.getElementById('modalTitle').textContent = '프록시 추가';
+    clearForm();
+    modal.show();
+}
+
+// 프록시 모달 닫기
+function closeModal() {
+    console.log('프록시 모달 닫기');
+    modal.hide();
+    editingProxy = null;
+    clearForm();
+}
+
+// 프록시 폼 초기화
+function clearForm() {
+    document.getElementById('proxyName').value = '';
+    document.getElementById('proxyHost').value = '';
+    document.getElementById('proxySshPort').value = '22';
+    document.getElementById('proxySnmpPort').value = '161';
+    document.getElementById('proxySnmpVersion').value = 'v2c';
+    document.getElementById('proxySnmpCommunity').value = 'public';
+    document.getElementById('proxyUsername').value = 'root';
+    document.getElementById('proxyPassword').value = '';
+    document.getElementById('proxyDescription').value = '';
+    document.getElementById('proxyIsActive').checked = false; // PRD 반영: 최초 오프라인
+    document.getElementById('proxyIsMain').checked = false;
+    document.getElementById('proxyGroup').value = '';
+}
+
+// 프록시 저장
+async function saveProxy() {
+    console.log('프록시 저장 시작');
+    const name = document.getElementById('proxyName').value.trim();
+    const host = document.getElementById('proxyHost').value.trim();
+    
+    console.log('프록시 입력값:', { name, host });
+    
+    if (!name || !host) {
+        showNotification('이름과 IP 주소는 필수 항목입니다.', 'warning');
+        return;
+    }
+    
+    const saveButton = document.getElementById('saveButton');
+    const originalText = saveButton.innerHTML;
+    saveButton.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>저장중...';
+    saveButton.disabled = true;
+    
+    try {
+        const groupId = document.getElementById('proxyGroup').value;
+        const data = {
+            name: name,
+            host: host,
+            ssh_port: parseInt(document.getElementById('proxySshPort').value) || 22,
+            snmp_port: parseInt(document.getElementById('proxySnmpPort').value) || 161,
+            snmp_version: document.getElementById('proxySnmpVersion').value,
+            snmp_community: document.getElementById('proxySnmpCommunity').value,
+            username: document.getElementById('proxyUsername').value || 'root',
+            password: document.getElementById('proxyPassword').value || '123456',
+            description: document.getElementById('proxyDescription').value,
+            is_active: document.getElementById('proxyIsActive').checked,
+            is_main: document.getElementById('proxyIsMain').checked,
+            group_id: groupId ? parseInt(groupId) : null
+        };
+        
+        const method = editingProxy ? 'PUT' : 'POST';
+        const url = editingProxy ? `/api/proxies/${editingProxy.id}` : '/api/proxies';
+        
+        console.log('프록시 요청 데이터:', data);
+        console.log('프록시 요청 URL:', url, 'Method:', method);
+        
+        const response = await fetch(url, {
+            method: method,
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(data)
+        });
+        
+        console.log('프록시 응답 상태:', response.status);
+        
+        if (response.ok) {
+            const result = await response.json();
+            console.log('프록시 저장 성공:', result);
+            await loadProxies();
+            await loadGroups(); // 그룹 카운트 업데이트
+            closeModal();
+            showNotification(
+                editingProxy ? '프록시가 수정되었습니다.' : '프록시가 추가되었습니다.', 
+                'success'
+            );
+        } else {
+            const errorText = await response.text();
+            console.error('프록시 서버 오류:', response.status, errorText);
+            
+            let errorMessage = '알 수 없는 오류';
+            try {
+                const error = JSON.parse(errorText);
+                errorMessage = error.message || error.error || errorText;
+            } catch {
+                errorMessage = errorText;
+            }
+            
+            showNotification('프록시 저장 실패: ' + errorMessage, 'danger');
+        }
+    } catch (error) {
+        console.error('프록시 저장 오류:', error);
+        showNotification('프록시 저장 중 오류: ' + error.message, 'danger');
+    } finally {
+        saveButton.innerHTML = originalText;
+        saveButton.disabled = false;
+    }
+}
+
+// 프록시 수정
+function editProxy(proxyId) {
+    editingProxy = proxies.find(p => p.id === proxyId);
+    if (!editingProxy) return;
+    
+    document.getElementById('modalTitle').textContent = '프록시 수정';
+    document.getElementById('proxyName').value = editingProxy.name;
+    document.getElementById('proxyHost').value = editingProxy.host;
+    document.getElementById('proxySshPort').value = editingProxy.ssh_port;
+    document.getElementById('proxySnmpPort').value = editingProxy.snmp_port || 161;
+    document.getElementById('proxySnmpVersion').value = editingProxy.snmp_version || 'v2c';
+    document.getElementById('proxySnmpCommunity').value = editingProxy.snmp_community || 'public';
+    document.getElementById('proxyUsername').value = editingProxy.username;
+    document.getElementById('proxyPassword').value = ''; // 보안상 비워둠
+    document.getElementById('proxyDescription').value = editingProxy.description || '';
+    document.getElementById('proxyIsActive').checked = editingProxy.is_active;
+    document.getElementById('proxyIsMain').checked = editingProxy.is_main || false;
+    document.getElementById('proxyGroup').value = editingProxy.group_id || '';
+    
+    modal.show();
+}
+
+// 프록시 삭제
+async function deleteProxy(proxyId) {
+    const proxy = proxies.find(p => p.id === proxyId);
+    if (!proxy) return;
+    
+    if (!confirm(`정말로 "${proxy.name}" 프록시를 삭제하시겠습니까?`)) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/proxies/${proxyId}`, {
+            method: 'DELETE'
+        });
+        
+        if (response.ok) {
+            await loadProxies();
+            await loadGroups(); // 그룹 카운트 업데이트
+            showNotification('프록시가 삭제되었습니다.', 'success');
+        } else {
+            showNotification('삭제에 실패했습니다.', 'danger');
+        }
+    } catch (error) {
+        console.error('프록시 삭제 오류:', error);
+        showNotification('프록시 삭제 중 오류가 발생했습니다.', 'danger');
+    }
+}
+
+// 연결 테스트 (PRD 기준: SSH/SNMP 연결 확인)
+async function testConnection(proxyId) {
+    const testBtn = document.getElementById(`testBtn-${proxyId}`);
+    const originalHtml = testBtn.innerHTML;
+    
+    try {
+        testBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+        testBtn.disabled = true;
+        
+        const response = await fetch(`/api/proxies/${proxyId}/test`, {
+            method: 'POST'
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showNotification(`연결 테스트 성공: ${result.message}`, 'success');
+            // 연결 성공 시 프록시 목록 새로고침하여 상태 업데이트 반영
+            await loadProxies();
+        } else {
+            showNotification(`연결 테스트 실패: ${result.message}`, 'danger');
+        }
+    } catch (error) {
+        console.error('연결 테스트 오류:', error);
+        showNotification('연결 테스트 중 오류가 발생했습니다.', 'danger');
+    } finally {
+        testBtn.innerHTML = originalHtml;
+        testBtn.disabled = false;
+    }
+}
+
+// ==================== 자원사용률 관리 ====================
+
+// 자원사용률 데이터 로드
+async function loadResourcesData() {
+    console.log('자원사용률 데이터 로딩 시작...');
+    try {
+        const response = await fetch('/api/monitoring/resources');
+        console.log('Resources response status:', response.status);
+        
+        if (response.ok) {
+            const result = await response.json();
+            resources = result.data || [];
+            console.log('로드된 자원 수:', resources.length);
+            updateResourcesTable(resources); // Pass resources directly
+            updateLastUpdate();
+            updateCollectedItemsCount(); // 수집된 항목 수 업데이트
+        } else {
+            const errorText = await response.text();
+            console.error('자원 API 오류:', response.status, errorText);
+            showNotification(`자원 목록을 불러오는데 실패했습니다. (${response.status})`, 'danger');
+        }
+    } catch (error) {
+        console.error('자원 목록 로딩 오류:', error);
+        showNotification('자원 네트워크 오류: ' + error.message, 'danger');
+    }
+}
+
+// 모니터링 요약 통계 로드
+async function loadMonitoringSummary() {
+    console.log('모니터링 요약 로딩 시작...');
+    try {
+        const response = await fetch('/api/monitoring/summary');
+        
+        if (response.ok) {
+            const summary = await response.json();
+            updateSummaryCards(summary);
+        } else {
+            console.error('요약 API 오류:', response.status);
+        }
+    } catch (error) {
+        console.error('요약 로딩 오류:', error);
+    }
+}
+
+// 요약 카드 업데이트
+function updateSummaryCards(summary) {
+    document.getElementById('totalProxiesCount').textContent = summary.total_proxies || 0;
+    document.getElementById('activeProxiesCount').textContent = summary.active_proxies || 0;
+    document.getElementById('offlineProxiesCount').textContent = summary.offline_proxies || 0;
+}
+
+// 자원사용률 테이블 업데이트
+function updateResourcesTable(data) {
+    const tbody = document.getElementById('resourcesTableBody');
+    const emptyMessage = document.getElementById('resourcesEmptyMessage');
+    
+    if (!data || data.length === 0) {
+        tbody.innerHTML = '';
+        emptyMessage.style.display = 'block';
+        return;
+    }
+    
+    emptyMessage.style.display = 'none';
+    
+    tbody.innerHTML = data.map(item => {
+        const resource = item.resource_data;
+        const cpuClass = getCpuClass(resource.cpu);
+        const memoryClass = getMemoryClass(resource.memory);
+        const role = item.is_main ? '메인' : '서브';
+        const roleClass = item.is_main ? 'badge bg-primary' : 'badge bg-secondary';
+        
+        // 값이 'error' 또는 '-1'인 경우 '-'로 표시
+        const formatValue = (value) => {
+            if (value === 'error' || value === '-1' || value === -1) return '-';
+            return value;
+        };
+        
+        return `
+            <tr>
+                <td class="ps-3">
+                    <div class="fw-medium">${item.proxy_name}</div>
+                    <small class="text-muted">${item.host}</small>
+                </td>
+                <td>${item.group_name || '-'}</td>
+                <td><span class="${roleClass}">${role}</span></td>
+                <td><span class="${cpuClass}">${formatValue(resource.cpu)}${resource.cpu !== 'error' && resource.cpu !== '-1' ? '%' : ''}</span></td>
+                <td><span class="${memoryClass}">${formatValue(resource.memory)}${resource.memory !== 'error' && resource.memory !== '-1' ? '%' : ''}</span></td>
+                <td>${formatValue(resource.uc)}</td>
+                <td>${formatValue(resource.cc)}</td>
+                <td>${formatValue(resource.cs)}</td>
+                <td>${formatValue(resource.http)}</td>
+                <td>${formatValue(resource.https)}</td>
+                <td>${formatValue(resource.ftp)}</td>
+                <td>
+                    ${resource.cpu === 'error' || resource.memory === 'error' ? 
+                        '<span class="badge bg-danger">오류</span>' : 
+                        '<span class="badge bg-success">정상</span>'}
+                </td>
+                <td>
+                    <small class="text-muted">${resource.time || '-'}</small>
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
+
+// CPU 사용률에 따른 CSS 클래스 반환
+function getCpuClass(cpu) {
+    if (cpu === 'error') return 'bg-secondary';
+    const value = parseInt(cpu);
+    if (value >= 80) return 'bg-danger';
+    if (value >= 60) return 'bg-warning';
+    return 'bg-success';
+}
+
+// 메모리 사용률에 따른 CSS 클래스 반환
+function getMemoryClass(memory) {
+    if (memory === 'error') return 'bg-secondary';
+    const value = parseInt(memory);
+    if (value >= 80) return 'bg-danger';
+    if (value >= 60) return 'bg-warning';
+    return 'bg-success';
+}
+
+// 마지막 업데이트 시간 갱신
+function updateLastUpdate() {
+    const now = new Date();
+    const timeString = now.toLocaleTimeString('ko-KR');
+    document.getElementById('lastUpdate').textContent = timeString;
+}
+
+// 자원사용률 새로고침
+async function refreshResources() {
+    console.log('자원사용률 수동 새로고침');
+    await loadResourcesData();
+    await loadMonitoringSummary();
+    showNotification('자원사용률이 업데이트되었습니다.', 'info');
+}
+
+// ==================== 모니터링 컨트롤 ====================
+
+// 모니터링 시작
+function startMonitoring() {
+    if (isMonitoringActive) return;
+    
+    console.log(`모니터링 시작 - 주기: ${monitoringIntervalTime}초`);
+    isMonitoringActive = true;
+    
+    // UI 업데이트
+    updateMonitoringUI();
+    
+    // 즉시 첫 번째 데이터 로드
+    loadResourcesData();
+    loadMonitoringSummary();
+    
+    // 주기적 업데이트 시작
+    monitoringInterval = setInterval(() => {
+        loadResourcesData();
+        loadMonitoringSummary();
+    }, monitoringIntervalTime * 1000);
+    
+    // 다음 업데이트 시간 표시 시작
+    updateNextUpdateTime();
+    
+    showNotification('모니터링이 시작되었습니다.', 'success');
+}
+
+// 모니터링 중지
+function stopMonitoring() {
+    if (!isMonitoringActive) return;
+    
+    console.log('모니터링 중지');
+    isMonitoringActive = false;
+    
+    // 인터벌 정리
+    if (monitoringInterval) {
+        clearInterval(monitoringInterval);
+        monitoringInterval = null;
+    }
+    
+    if (nextUpdateTimeout) {
+        clearTimeout(nextUpdateTimeout);
+        nextUpdateTimeout = null;
+    }
+    
+    // UI 업데이트
+    updateMonitoringUI();
+    document.getElementById('nextUpdate').textContent = '-';
+    
+    showNotification('모니터링이 중지되었습니다.', 'warning');
+}
+
+// 모니터링 주기 업데이트
+function updateMonitoringInterval() {
+    const newInterval = parseInt(document.getElementById('monitoringInterval').value);
+    monitoringIntervalTime = newInterval;
+    
+    console.log(`모니터링 주기 변경: ${monitoringIntervalTime}초`);
+    
+    // 모니터링이 활성 상태라면 재시작
+    if (isMonitoringActive) {
+        stopMonitoring();
+        setTimeout(() => startMonitoring(), 100);
+    }
+    
+    showNotification(`모니터링 주기가 ${monitoringIntervalTime}초로 변경되었습니다.`, 'info');
+}
+
+// 모니터링 UI 업데이트
+function updateMonitoringUI() {
+    const status = document.getElementById('monitoringStatus');
+    const startBtn = document.getElementById('startMonitoringBtn');
+    const stopBtn = document.getElementById('stopMonitoringBtn');
+    
+    if (isMonitoringActive) {
+        status.textContent = '실행중';
+        status.className = 'badge bg-success';
+        startBtn.disabled = true;
+        stopBtn.disabled = false;
+    } else {
+        status.textContent = '정지됨';
+        status.className = 'badge bg-secondary';
+        startBtn.disabled = false;
+        stopBtn.disabled = true;
+    }
+}
+
+// 다음 업데이트 시간 표시
+function updateNextUpdateTime() {
+    if (!isMonitoringActive) return;
+    
+    let countdown = monitoringIntervalTime;
+    
+    const updateCountdown = () => {
+        if (!isMonitoringActive) return;
+        
+        document.getElementById('nextUpdate').textContent = `${countdown}초 후`;
+        countdown--;
+        
+        if (countdown >= 0) {
+            nextUpdateTimeout = setTimeout(updateCountdown, 1000);
+        } else {
+            countdown = monitoringIntervalTime;
+            nextUpdateTimeout = setTimeout(updateCountdown, 1000);
+        }
+    };
+    
+    updateCountdown();
+}
+
+// 수집된 항목 수 업데이트
+function updateCollectedItemsCount() {
+    const countElement = document.getElementById('collectedItemsCount');
+    if (countElement) {
+        // 수집되는 항목: CPU, Memory, UC, CC, CS, HTTP, HTTPS, FTP = 8개
+        countElement.textContent = '8';
+    }
+}
+
+// ==================== 공통 유틸리티 ====================
+
+// 알림 표시 (PRD 기준: 미니멀 디자인)
+function showNotification(message, type = 'info') {
+    const alertClass = type === 'success' ? 'alert-success' : 
+                      type === 'danger' ? 'alert-danger' : 
+                      type === 'warning' ? 'alert-warning' : 'alert-info';
+    
+    const alertDiv = document.createElement('div');
+    alertDiv.className = `alert ${alertClass} alert-dismissible fade show`;
+    alertDiv.innerHTML = `
+        <i class="fas ${getIconForType(type)} me-2"></i>
+        ${message}
+        <button type="button" class="btn-close" onclick="this.parentElement.remove()"></button>
+    `;
+    
+    const notifications = document.getElementById('notifications');
+    notifications.appendChild(alertDiv);
+    
+    // 5초 후 자동 제거
+    setTimeout(() => {
+        if (alertDiv.parentElement) {
+            alertDiv.remove();
+        }
+    }, 5000);
+}
+
+// 알림 타입별 아이콘
+function getIconForType(type) {
+    switch(type) {
+        case 'success': return 'fa-check-circle';
+        case 'danger': return 'fa-exclamation-circle';
+        case 'warning': return 'fa-exclamation-triangle';
+        default: return 'fa-info-circle';
+    }
+}

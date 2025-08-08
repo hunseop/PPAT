@@ -3,184 +3,66 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>프록시 모니터링 & 정책 관리 시스템 (PPAT)</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <title>PPAT - 프록시 모니터링 시스템</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    <link href="{{ url_for('static', filename='css/style.css') }}" rel="stylesheet">
 </head>
-<body>
+<body class="bg-light">
     <div id="app">
-        <!-- 네비게이션 바 -->
-        <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <!-- 네비게이션 -->
+        <nav class="navbar navbar-expand-lg navbar-dark bg-primary shadow-sm">
             <div class="container">
-                <a class="navbar-brand" href="#">
-                    <i class="fas fa-shield-alt me-2"></i>
-                    PPAT - 프록시 모니터링 시스템
+                <a class="navbar-brand fw-bold" href="#">
+                    PPAT
                 </a>
-                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
-                    <span class="navbar-toggler-icon"></span>
-                </button>
-                <div class="collapse navbar-collapse" id="navbarNav">
-                    <ul class="navbar-nav me-auto">
-                        <li class="nav-item">
-                            <a class="nav-link" href="#" @click="currentTab = 'dashboard'" 
-                               :class="{ active: currentTab === 'dashboard' }">
-                                <i class="fas fa-tachometer-alt me-1"></i>대시보드
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="#" @click="currentTab = 'proxy'" 
-                               :class="{ active: currentTab === 'proxy' }">
-                                <i class="fas fa-server me-1"></i>프록시 관리
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="#" @click="currentTab = 'monitoring'" 
-                               :class="{ active: currentTab === 'monitoring' }">
-                                <i class="fas fa-chart-line me-1"></i>모니터링
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="#" @click="currentTab = 'sessions'" 
-                               :class="{ active: currentTab === 'sessions' }">
-                                <i class="fas fa-users me-1"></i>세션 관리
-                            </a>
-                        </li>
-                    </ul>
-                    <div class="navbar-text">
-                        <span class="badge" :class="monitoringStatus.active ? 'bg-success' : 'bg-secondary'">
-                            <i class="fas fa-circle me-1"></i>
-                            <span v-if="monitoringStatus.active">모니터링 활성</span>
-                            <span v-else>모니터링 비활성</span>
-                        </span>
-                    </div>
+                <div class="navbar-nav ms-auto">
+                    <a class="nav-link px-3" href="#" onclick="showTab('management')">
+                        관리
+                    </a>
+                    <a class="nav-link px-3" href="#" onclick="showTab('resources')">
+                        자원사용률
+                    </a>
+                    <a class="nav-link px-3" href="#" onclick="alert('개발 예정')">
+                        세션브라우저
+                    </a>
+                    <a class="nav-link px-3" href="#" onclick="alert('개발 예정')">
+                        정책조회
+                    </a>
                 </div>
             </div>
         </nav>
 
-        <!-- 메인 컨텐츠 -->
-        <div class="container-fluid mt-4">
-            <!-- 대시보드 탭 -->
-            <div v-show="currentTab === 'dashboard'" class="tab-content">
-                <div class="row">
-                    <div class="col-md-3">
-                        <div class="card bg-primary text-white">
-                            <div class="card-body">
-                                <div class="d-flex justify-content-between">
-                                    <div>
-                                        <h5 class="card-title">총 프록시 서버</h5>
-                                        <h2>{{ totalProxies }}</h2>
-                                    </div>
-                                    <div class="align-self-center">
-                                        <i class="fas fa-server fa-2x"></i>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-3">
-                        <div class="card bg-success text-white">
-                            <div class="card-body">
-                                <div class="d-flex justify-content-between">
-                                    <div>
-                                        <h5 class="card-title">온라인 서버</h5>
-                                        <h2>{{ onlineProxies }}</h2>
-                                    </div>
-                                    <div class="align-self-center">
-                                        <i class="fas fa-check-circle fa-2x"></i>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-3">
-                        <div class="card bg-warning text-white">
-                            <div class="card-body">
-                                <div class="d-flex justify-content-between">
-                                    <div>
-                                        <h5 class="card-title">총 세션</h5>
-                                        <h2>{{ totalSessions }}</h2>
-                                    </div>
-                                    <div class="align-self-center">
-                                        <i class="fas fa-users fa-2x"></i>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-3">
-                        <div class="card bg-info text-white">
-                            <div class="card-body">
-                                <div class="d-flex justify-content-between">
-                                    <div>
-                                        <h5 class="card-title">프록시 그룹</h5>
-                                        <h2>{{ totalGroups }}</h2>
-                                    </div>
-                                    <div class="align-self-center">
-                                        <i class="fas fa-layer-group fa-2x"></i>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+        <!-- 알림 영역 -->
+        <div id="notifications" class="container mt-3"></div>
 
-                <!-- 최신 리소스 현황 -->
-                <div class="row mt-4">
+        <!-- 메인 컨텐츠 -->
+        <div class="container mt-4">
+            <!-- 관리 탭 -->
+            <div id="managementTab">
+                <!-- 프록시 그룹 관리 섹션 -->
+                <div class="row mb-4">
                     <div class="col-12">
-                        <div class="card">
-                            <div class="card-header">
-                                <h5><i class="fas fa-chart-bar me-2"></i>최신 리소스 현황</h5>
+                        <div class="card shadow-sm">
+                            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                                <h5 class="mb-0 text-muted">프록시 그룹</h5>
+                                <button class="btn btn-primary btn-sm" onclick="showGroupModal()">
+                                    그룹 추가
+                                </button>
                             </div>
-                            <div class="card-body">
+                            <div class="card-body p-0">
                                 <div class="table-responsive">
-                                    <table class="table table-striped">
-                                        <thead>
+                                    <table class="table table-hover mb-0">
+                                        <thead class="table-light">
                                             <tr>
-                                                <th>프록시</th>
-                                                <th>상태</th>
-                                                <th>CPU</th>
-                                                <th>메모리</th>
-                                                <th>디스크</th>
-                                                <th>세션</th>
-                                                <th>업데이트</th>
+                                                <th class="border-0 ps-3">그룹명</th>
+                                                <th class="border-0">설명</th>
+                                                <th class="border-0">프록시 수</th>
+                                                <th class="border-0">메인 서버</th>
+                                                <th class="border-0 text-center">작업</th>
                                             </tr>
                                         </thead>
-                                        <tbody>
-                                            <tr v-for="stat in latestResources" :key="stat.proxy_id">
-                                                <td>{{ stat.proxy_name }}</td>
-                                                <td>
-                                                    <span class="badge" :class="getStatusClass(stat.status)">
-                                                        {{ stat.status }}
-                                                    </span>
-                                                </td>
-                                                <td>
-                                                    <div class="progress" style="height: 20px;">
-                                                        <div class="progress-bar" :class="getProgressClass(stat.cpu_usage, 80)"
-                                                             :style="{ width: stat.cpu_usage + '%' }">
-                                                            {{ stat.cpu_usage }}%
-                                                        </div>
-                                                    </div>
-                                                </td>
-                                                <td>
-                                                    <div class="progress" style="height: 20px;">
-                                                        <div class="progress-bar" :class="getProgressClass(stat.memory_usage, 85)"
-                                                             :style="{ width: stat.memory_usage + '%' }">
-                                                            {{ stat.memory_usage }}%
-                                                        </div>
-                                                    </div>
-                                                </td>
-                                                <td>
-                                                    <div class="progress" style="height: 20px;">
-                                                        <div class="progress-bar" :class="getProgressClass(stat.disk_usage, 90)"
-                                                             :style="{ width: stat.disk_usage + '%' }">
-                                                            {{ stat.disk_usage }}%
-                                                        </div>
-                                                    </div>
-                                                </td>
-                                                <td>{{ stat.session_count }}</td>
-                                                <td>{{ formatDateTime(stat.timestamp) }}</td>
-                                            </tr>
+                                        <tbody id="groupTableBody">
+                                            <!-- 그룹 목록이 여기에 동적으로 로드됩니다 -->
                                         </tbody>
                                     </table>
                                 </div>
@@ -188,449 +70,182 @@
                         </div>
                     </div>
                 </div>
-            </div>
 
-            <!-- 프록시 관리 탭 -->
-            <div v-show="currentTab === 'proxy'" class="tab-content">
-                <!-- 프록시 그룹 관리 -->
-                <div class="card mb-4">
-                    <div class="card-header d-flex justify-content-between align-items-center">
-                        <h5><i class="fas fa-layer-group me-2"></i>프록시 그룹</h5>
-                        <button class="btn btn-primary btn-sm" @click="showGroupModal = true">
-                            <i class="fas fa-plus me-1"></i>그룹 추가
-                        </button>
-                    </div>
-                    <div class="card-body">
-                        <div class="table-responsive">
-                            <table class="table table-striped">
-                                <thead>
-                                    <tr>
-                                        <th>이름</th>
-                                        <th>설명</th>
-                                        <th>프록시 수</th>
-                                        <th>메인 프록시</th>
-                                        <th>생성일</th>
-                                        <th>작업</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr v-for="group in groups" :key="group.id">
-                                        <td>{{ group.name }}</td>
-                                        <td>{{ group.description }}</td>
-                                        <td>{{ group.proxy_count }}</td>
-                                        <td>{{ group.main_proxy_count }}</td>
-                                        <td>{{ formatDate(group.created_at) }}</td>
-                                        <td>
-                                            <button class="btn btn-sm btn-outline-primary me-1" 
-                                                    @click="editGroup(group)">
-                                                <i class="fas fa-edit"></i>
-                                            </button>
-                                            <button class="btn btn-sm btn-outline-danger" 
-                                                    @click="deleteGroup(group.id)">
-                                                <i class="fas fa-trash"></i>
-                                            </button>
-                                        </td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- 프록시 서버 관리 -->
-                <div class="card">
-                    <div class="card-header d-flex justify-content-between align-items-center">
-                        <h5><i class="fas fa-server me-2"></i>프록시 서버</h5>
-                        <div>
-                            <select v-model="selectedGroupId" class="form-select d-inline-block me-2" style="width: auto;">
-                                <option value="">모든 그룹</option>
-                                <option v-for="group in groups" :key="group.id" :value="group.id">
-                                    {{ group.name }}
-                                </option>
-                            </select>
-                            <button class="btn btn-primary btn-sm" @click="showServerModal = true">
-                                <i class="fas fa-plus me-1"></i>서버 추가
-                            </button>
-                        </div>
-                    </div>
-                    <div class="card-body">
-                        <div class="table-responsive">
-                            <table class="table table-striped">
-                                <thead>
-                                    <tr>
-                                        <th>이름</th>
-                                        <th>호스트</th>
-                                        <th>그룹</th>
-                                        <th>타입</th>
-                                        <th>상태</th>
-                                        <th>SSH 포트</th>
-                                        <th>SNMP 포트</th>
-                                        <th>작업</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr v-for="server in filteredServers" :key="server.id">
-                                        <td>{{ server.name }}</td>
-                                        <td>{{ server.host }}</td>
-                                        <td>{{ server.group_name }}</td>
-                                        <td>
-                                            <span class="badge" :class="server.is_main ? 'bg-warning' : 'bg-secondary'">
-                                                {{ server.is_main ? 'Main' : 'Cluster' }}
-                                            </span>
-                                        </td>
-                                        <td>
-                                            <span class="badge" :class="server.is_active ? 'bg-success' : 'bg-danger'">
-                                                {{ server.is_active ? '활성' : '비활성' }}
-                                            </span>
-                                        </td>
-                                        <td>{{ server.ssh_port }}</td>
-                                        <td>{{ server.snmp_port }}</td>
-                                        <td>
-                                            <button class="btn btn-sm btn-outline-info me-1" 
-                                                    @click="testConnection(server.id)">
-                                                <i class="fas fa-plug"></i>
-                                            </button>
-                                            <button class="btn btn-sm btn-outline-primary me-1" 
-                                                    @click="editServer(server)">
-                                                <i class="fas fa-edit"></i>
-                                            </button>
-                                            <button class="btn btn-sm btn-outline-danger" 
-                                                    @click="deleteServer(server.id)">
-                                                <i class="fas fa-trash"></i>
-                                            </button>
-                                        </td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- 모니터링 탭 -->
-            <div v-show="currentTab === 'monitoring'" class="tab-content">
-                <div class="row mb-3">
+                <!-- 프록시 서버 관리 섹션 -->
+                <div class="row">
                     <div class="col-12">
-                        <div class="card">
-                            <div class="card-header">
-                                <h5><i class="fas fa-cog me-2"></i>모니터링 제어</h5>
+                        <div class="card shadow-sm">
+                            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                                <h5 class="mb-0 text-muted">프록시 서버</h5>
+                                <button class="btn btn-primary btn-sm" onclick="showModal()">
+                                    프록시 추가
+                                </button>
+                            </div>
+                            <div class="card-body p-0">
+                                <div class="table-responsive">
+                                    <table class="table table-hover mb-0">
+                                        <thead class="table-light">
+                                            <tr>
+                                                <th class="border-0 ps-3">이름</th>
+                                                <th class="border-0">IP 주소</th>
+                                                <th class="border-0">그룹</th>
+                                                <th class="border-0">역할</th>
+                                                <th class="border-0">상태</th>
+                                                <th class="border-0 text-center">작업</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="proxyTableBody">
+                                            <!-- 프록시 목록이 여기에 동적으로 로드됩니다 -->
+                                        </tbody>
+                                    </table>
+                                </div>
+
+                                <!-- 빈 상태 메시지 -->
+                                <div id="emptyMessage" class="text-center py-5" style="display: none;">
+                                    <div class="text-muted mb-3">
+                                        <svg width="48" height="48" viewBox="0 0 24 24" fill="currentColor">
+                                            <path d="M4,6V8H6V6H4M6,10V12H4V10H6M6,14V16H4V14H6M6,18V20H4V18H6M8,6V8H10V6H8M10,10V12H8V10H10M8,14V16H10V14H8M8,18V20H10V18H8M12,6V8H14V6H12M14,10V12H12V10H14M12,14V16H14V14H12M12,18V20H14V18H12M16,6V8H18V6H16M18,10V12H16V10H18M16,14V16H18V14H16M16,18V20H18V18H16M20,6V8H22V6H20M22,10V12H20V10H22M20,14V16H22V14H20M20,18V20H22V18H20Z"/>
+                                        </svg>
+                                    </div>
+                                    <h6 class="text-muted">등록된 프록시 서버가 없습니다</h6>
+                                    <p class="text-muted small">첫 번째 프록시 서버를 추가해보세요.</p>
+                                    <button class="btn btn-primary btn-sm" onclick="showModal()">
+                                        프록시 추가
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 자원사용률 탭 -->
+            <div id="resourcesTab" style="display: none;">
+                <!-- 요약 통계 -->
+                <div class="row mb-4">
+                    <div class="col-md-3">
+                        <div class="card text-center shadow-sm">
+                            <div class="card-body">
+                                <h5 class="card-title text-primary" id="totalProxiesCount">0</h5>
+                                <p class="card-text small text-muted">전체 프록시</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card text-center shadow-sm">
+                            <div class="card-body">
+                                <h5 class="card-title text-success" id="activeProxiesCount">0</h5>
+                                <p class="card-text small text-muted">온라인</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card text-center shadow-sm">
+                            <div class="card-body">
+                                <h5 class="card-title text-secondary" id="offlineProxiesCount">0</h5>
+                                <p class="card-text small text-muted">오프라인</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card text-center shadow-sm">
+                            <div class="card-body">
+                                <div class="mb-2">
+                                    <span class="badge" id="monitoringStatus">정지됨</span>
+                                </div>
+                                <div class="btn-group-vertical w-100">
+                                    <button class="btn btn-sm btn-success mb-1" id="startMonitoringBtn" onclick="startMonitoring()">
+                                        시작
+                                    </button>
+                                    <button class="btn btn-sm btn-danger mb-2" id="stopMonitoringBtn" onclick="stopMonitoring()" disabled>
+                                        중지
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-primary" onclick="refreshResources()">
+                                        수동 새로고침
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 모니터링 설정 -->
+                <div class="row mb-4">
+                    <div class="col-12">
+                        <div class="card shadow-sm">
+                            <div class="card-header bg-white">
+                                <h6 class="mb-0 text-muted">모니터링 설정</h6>
                             </div>
                             <div class="card-body">
                                 <div class="row align-items-center">
-                                    <div class="col-md-4">
-                                        <button class="btn" :class="monitoringStatus.active ? 'btn-danger' : 'btn-success'" 
-                                                @click="toggleMonitoring">
-                                            <i class="fas" :class="monitoringStatus.active ? 'fa-stop' : 'fa-play'"></i>
-                                            {{ monitoringStatus.active ? '모니터링 중지' : '모니터링 시작' }}
-                                        </button>
-                                    </div>
-                                    <div class="col-md-4">
-                                        <div class="input-group">
-                                            <span class="input-group-text">갱신 간격</span>
-                                            <input type="number" class="form-control" v-model="monitoringInterval" 
-                                                   min="1" max="60" @change="updateInterval">
-                                            <span class="input-group-text">초</span>
-                                        </div>
-                                    </div>
-                                    <div class="col-md-4">
-                                        <select v-model="selectedGroupIdForMonitoring" class="form-select">
-                                            <option value="">모든 그룹</option>
-                                            <option v-for="group in groups" :key="group.id" :value="group.id">
-                                                {{ group.name }}
-                                            </option>
+                                    <div class="col-md-3">
+                                        <label for="monitoringInterval" class="form-label small">갱신 주기 (초)</label>
+                                        <select class="form-select form-select-sm" id="monitoringInterval" onchange="updateMonitoringInterval()">
+                                            <option value="10">10초</option>
+                                            <option value="30" selected>30초</option>
+                                            <option value="60">1분</option>
+                                            <option value="300">5분</option>
                                         </select>
                                     </div>
+                                    <div class="col-md-6">
+                                        <small class="text-muted">
+                                            마지막 업데이트: <span id="lastUpdate">-</span> | 
+                                            다음 업데이트: <span id="nextUpdate">-</span>
+                                        </small>
+                                    </div>
+                                    <div class="col-md-3 text-end">
+                                        <small class="text-muted">
+                                            수집된 항목: <span class="badge bg-light text-dark" id="collectedItemsCount">8</span>
+                                        </small>
+                                    </div>
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <!-- 실시간 리소스 현황 -->
-                <div class="card">
-                    <div class="card-header">
-                        <h5><i class="fas fa-chart-line me-2"></i>실시간 리소스 현황</h5>
-                    </div>
-                    <div class="card-body">
-                        <div class="table-responsive">
-                            <table class="table table-striped">
-                                <thead>
-                                    <tr>
-                                        <th>프록시</th>
-                                        <th>상태</th>
-                                        <th>CPU 사용률</th>
-                                        <th>메모리 사용률</th>
-                                        <th>디스크 사용률</th>
-                                        <th>네트워크 입력</th>
-                                        <th>네트워크 출력</th>
-                                        <th>세션 수</th>
-                                        <th>업데이트</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr v-for="stat in filteredResources" :key="stat.proxy_id" 
-                                        :class="{ 'table-warning': hasAlert(stat) }">
-                                        <td>{{ stat.proxy_name }}</td>
-                                        <td>
-                                            <span class="badge" :class="getStatusClass(stat.status)">
-                                                {{ stat.status }}
-                                            </span>
-                                        </td>
-                                        <td>
-                                            <div class="progress" style="height: 20px;">
-                                                <div class="progress-bar" :class="getProgressClass(stat.cpu_usage, thresholds.cpu)"
-                                                     :style="{ width: stat.cpu_usage + '%' }">
-                                                    {{ stat.cpu_usage }}%
-                                                </div>
-                                            </div>
-                                        </td>
-                                        <td>
-                                            <div class="progress" style="height: 20px;">
-                                                <div class="progress-bar" :class="getProgressClass(stat.memory_usage, thresholds.memory)"
-                                                     :style="{ width: stat.memory_usage + '%' }">
-                                                    {{ stat.memory_usage }}%
-                                                </div>
-                                            </div>
-                                        </td>
-                                        <td>
-                                            <div class="progress" style="height: 20px;">
-                                                <div class="progress-bar" :class="getProgressClass(stat.disk_usage, thresholds.disk)"
-                                                     :style="{ width: stat.disk_usage + '%' }">
-                                                    {{ stat.disk_usage }}%
-                                                </div>
-                                            </div>
-                                        </td>
-                                        <td>{{ formatBytes(stat.network_in) }}/s</td>
-                                        <td>{{ formatBytes(stat.network_out) }}/s</td>
-                                        <td>{{ stat.session_count }}</td>
-                                        <td>{{ formatDateTime(stat.timestamp) }}</td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-            </div>
+                <!-- 리소스 모니터링 테이블 -->
+                <div class="row">
+                    <div class="col-12">
+                        <div class="card shadow-sm">
+                            <div class="card-header bg-white">
+                                <h5 class="mb-0 text-muted">실시간 자원사용률</h5>
+                            </div>
+                            <div class="card-body p-0">
+                                <div class="table-responsive">
+                                    <table class="table table-hover mb-0">
+                                        <thead class="table-light">
+                                            <tr>
+                                                <th class="border-0 ps-3">프록시</th>
+                                                <th class="border-0">그룹</th>
+                                                <th class="border-0">역할</th>
+                                                <th class="border-0">CPU</th>
+                                                <th class="border-0">메모리</th>
+                                                <th class="border-0">고유클라이언트</th>
+                                                <th class="border-0">CC</th>
+                                                <th class="border-0">CS</th>
+                                                <th class="border-0">HTTP</th>
+                                                <th class="border-0">HTTPS</th>
+                                                <th class="border-0">FTP</th>
+                                                <th class="border-0">상태</th>
+                                                <th class="border-0">업데이트</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="resourcesTableBody">
+                                            <!-- 리소스 데이터가 여기에 동적으로 로드됩니다 -->
+                                        </tbody>
+                                    </table>
+                                </div>
 
-            <!-- 세션 관리 탭 -->
-            <div v-show="currentTab === 'sessions'" class="tab-content">
-                <div class="card">
-                    <div class="card-header">
-                        <h5><i class="fas fa-users me-2"></i>세션 관리</h5>
-                    </div>
-                    <div class="card-body">
-                        <!-- 검색 및 필터 -->
-                        <div class="row mb-3">
-                            <div class="col-md-4">
-                                <input type="text" class="form-control" placeholder="검색 (IP, 사용자명, URL)" 
-                                       v-model="sessionSearch" @input="searchSessions">
-                            </div>
-                            <div class="col-md-4">
-                                <select v-model="selectedProxyIdForSessions" class="form-select" @change="searchSessions">
-                                    <option value="">모든 프록시</option>
-                                    <option v-for="server in servers" :key="server.id" :value="server.id">
-                                        {{ server.name }} ({{ server.host }})
-                                    </option>
-                                </select>
-                            </div>
-                            <div class="col-md-4">
-                                <button class="btn btn-primary" @click="searchSessions">
-                                    <i class="fas fa-search me-1"></i>검색
-                                </button>
-                                <button class="btn btn-secondary ms-2" @click="showSessionStats = true">
-                                    <i class="fas fa-chart-pie me-1"></i>통계
-                                </button>
-                            </div>
-                        </div>
-
-                        <!-- 세션 목록 -->
-                        <div class="table-responsive">
-                            <table class="table table-striped">
-                                <thead>
-                                    <tr>
-                                        <th>클라이언트 IP</th>
-                                        <th>사용자명</th>
-                                        <th>URL</th>
-                                        <th>프로토콜</th>
-                                        <th>상태</th>
-                                        <th>프록시</th>
-                                        <th>시간</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr v-for="session in sessions" :key="session.id">
-                                        <td>{{ session.client_ip }}</td>
-                                        <td>{{ session.username }}</td>
-                                        <td class="text-truncate" style="max-width: 200px;">{{ session.url }}</td>
-                                        <td>{{ session.protocol }}</td>
-                                        <td>{{ session.status }}</td>
-                                        <td>{{ session.proxy_name }}</td>
-                                        <td>{{ formatDateTime(session.timestamp) }}</td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- 모달들 -->
-        <!-- 그룹 추가/수정 모달 -->
-        <div class="modal fade" :class="{ show: showGroupModal }" :style="{ display: showGroupModal ? 'block' : 'none' }">
-            <div class="modal-dialog">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title">{{ editingGroup ? '그룹 수정' : '그룹 추가' }}</h5>
-                        <button type="button" class="btn-close" @click="closeGroupModal"></button>
-                    </div>
-                    <div class="modal-body">
-                        <form @submit.prevent="saveGroup">
-                            <div class="mb-3">
-                                <label class="form-label">그룹 이름 *</label>
-                                <input type="text" class="form-control" v-model="groupForm.name" required>
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label">설명</label>
-                                <textarea class="form-control" v-model="groupForm.description" rows="3"></textarea>
-                            </div>
-                        </form>
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" @click="closeGroupModal">취소</button>
-                        <button type="button" class="btn btn-primary" @click="saveGroup">저장</button>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- 서버 추가/수정 모달 -->
-        <div class="modal fade" :class="{ show: showServerModal }" :style="{ display: showServerModal ? 'block' : 'none' }">
-            <div class="modal-dialog modal-lg">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title">{{ editingServer ? '서버 수정' : '서버 추가' }}</h5>
-                        <button type="button" class="btn-close" @click="closeServerModal"></button>
-                    </div>
-                    <div class="modal-body">
-                        <form @submit.prevent="saveServer">
-                            <div class="row">
-                                <div class="col-md-6">
-                                    <div class="mb-3">
-                                        <label class="form-label">서버 이름 *</label>
-                                        <input type="text" class="form-control" v-model="serverForm.name" required>
+                                <!-- 빈 상태 메시지 -->
+                                <div id="resourcesEmptyMessage" class="text-center py-5" style="display: none;">
+                                    <div class="text-muted mb-3">
+                                        <svg width="48" height="48" viewBox="0 0 24 24" fill="currentColor">
+                                            <path d="M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M7,13H17V11H7"/>
+                                        </svg>
                                     </div>
-                                </div>
-                                <div class="col-md-6">
-                                    <div class="mb-3">
-                                        <label class="form-label">호스트 *</label>
-                                        <input type="text" class="form-control" v-model="serverForm.host" required>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="row">
-                                <div class="col-md-6">
-                                    <div class="mb-3">
-                                        <label class="form-label">그룹 *</label>
-                                        <select class="form-select" v-model="serverForm.group_id" required>
-                                            <option value="">그룹 선택</option>
-                                            <option v-for="group in groups" :key="group.id" :value="group.id">
-                                                {{ group.name }}
-                                            </option>
-                                        </select>
-                                    </div>
-                                </div>
-                                <div class="col-md-6">
-                                    <div class="mb-3">
-                                        <label class="form-label">사용자명</label>
-                                        <input type="text" class="form-control" v-model="serverForm.username">
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="row">
-                                <div class="col-md-6">
-                                    <div class="mb-3">
-                                        <label class="form-label">SSH 포트</label>
-                                        <input type="number" class="form-control" v-model="serverForm.ssh_port">
-                                    </div>
-                                </div>
-                                <div class="col-md-6">
-                                    <div class="mb-3">
-                                        <label class="form-label">SNMP 포트</label>
-                                        <input type="number" class="form-control" v-model="serverForm.snmp_port">
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="row">
-                                <div class="col-md-6">
-                                    <div class="mb-3">
-                                        <div class="form-check">
-                                            <input class="form-check-input" type="checkbox" v-model="serverForm.is_main">
-                                            <label class="form-check-label">메인 프록시</label>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="col-md-6">
-                                    <div class="mb-3">
-                                        <div class="form-check">
-                                            <input class="form-check-input" type="checkbox" v-model="serverForm.is_active">
-                                            <label class="form-check-label">활성 상태</label>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label">설명</label>
-                                <textarea class="form-control" v-model="serverForm.description" rows="3"></textarea>
-                            </div>
-                        </form>
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" @click="closeServerModal">취소</button>
-                        <button type="button" class="btn btn-primary" @click="saveServer">저장</button>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- 세션 통계 모달 -->
-        <div class="modal fade" :class="{ show: showSessionStats }" :style="{ display: showSessionStats ? 'block' : 'none' }">
-            <div class="modal-dialog modal-lg">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title">세션 통계</h5>
-                        <button type="button" class="btn-close" @click="showSessionStats = false"></button>
-                    </div>
-                    <div class="modal-body">
-                        <div class="row">
-                            <div class="col-md-4">
-                                <h6>IP별 세션</h6>
-                                <div class="list-group">
-                                    <div v-for="stat in sessionStats.by_ip" :key="stat.ip" 
-                                         class="list-group-item d-flex justify-content-between">
-                                        <span>{{ stat.ip }}</span>
-                                        <span class="badge bg-primary">{{ stat.count }}</span>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="col-md-4">
-                                <h6>프록시별 세션</h6>
-                                <div class="list-group">
-                                    <div v-for="stat in sessionStats.by_proxy" :key="stat.proxy" 
-                                         class="list-group-item d-flex justify-content-between">
-                                        <span>{{ stat.proxy }}</span>
-                                        <span class="badge bg-success">{{ stat.count }}</span>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="col-md-4">
-                                <h6>URL별 세션</h6>
-                                <div class="list-group">
-                                    <div v-for="stat in sessionStats.by_url" :key="stat.url" 
-                                         class="list-group-item d-flex justify-content-between">
-                                        <span class="text-truncate">{{ stat.url }}</span>
-                                        <span class="badge bg-info">{{ stat.count }}</span>
-                                    </div>
+                                    <h6 class="text-muted">활성화된 프록시가 없습니다</h6>
+                                    <p class="text-muted small">프록시를 활성화하여 모니터링을 시작하세요.</p>
                                 </div>
                             </div>
                         </div>
@@ -640,10 +255,154 @@
         </div>
     </div>
 
-    <!-- 스크립트 -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
-    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+    <!-- 프록시 그룹 모달 -->
+    <div class="modal fade" id="groupModal" tabindex="-1" aria-labelledby="groupModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header border-0">
+                    <h5 class="modal-title" id="groupModalTitle">프록시 그룹 추가</h5>
+                    <button type="button" class="btn-close" onclick="closeGroupModal()"></button>
+                </div>
+                <div class="modal-body">
+                    <form>
+                        <div class="mb-3">
+                            <label for="groupName" class="form-label">그룹명 <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="groupName" placeholder="예: 서울 센터" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="groupDescription" class="form-label">설명</label>
+                            <textarea class="form-control" id="groupDescription" rows="2" placeholder="그룹에 대한 설명을 입력하세요"></textarea>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer border-0">
+                    <button type="button" class="btn btn-light" onclick="closeGroupModal()">취소</button>
+                    <button type="button" class="btn btn-primary" id="saveGroupButton" onclick="saveGroup()">
+                        저장
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 프록시 서버 모달 -->
+    <div class="modal fade" id="proxyModal" tabindex="-1" aria-labelledby="proxyModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header border-0">
+                    <h5 class="modal-title" id="modalTitle">프록시 추가</h5>
+                    <button type="button" class="btn-close" onclick="closeModal()"></button>
+                </div>
+                <div class="modal-body">
+                    <form>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="proxyName" class="form-label">이름 <span class="text-danger">*</span></label>
+                                    <input type="text" class="form-control" id="proxyName" placeholder="예: Seoul Main Proxy" required>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="proxyHost" class="form-label">IP 주소 <span class="text-danger">*</span></label>
+                                    <input type="text" class="form-control" id="proxyHost" placeholder="예: 192.168.1.100" required>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-4">
+                                <div class="mb-3">
+                                    <label for="proxySshPort" class="form-label">SSH 포트</label>
+                                    <input type="number" class="form-control" id="proxySshPort" value="22" min="1" max="65535">
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="mb-3">
+                                    <label for="proxySnmpPort" class="form-label">SNMP 포트</label>
+                                    <input type="number" class="form-control" id="proxySnmpPort" value="161" min="1" max="65535">
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="mb-3">
+                                    <label for="proxyUsername" class="form-label">사용자명</label>
+                                    <input type="text" class="form-control" id="proxyUsername" value="root">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-4">
+                                <div class="mb-3">
+                                    <label for="proxySnmpVersion" class="form-label">SNMP 버전</label>
+                                    <select class="form-select" id="proxySnmpVersion">
+                                        <option value="v2c" selected>SNMP v2c</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="mb-3">
+                                    <label for="proxySnmpCommunity" class="form-label">커뮤니티 스트링</label>
+                                    <input type="text" class="form-control" id="proxySnmpCommunity" value="public" placeholder="예: public">
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="mb-3">
+                                    <label for="proxyGroup" class="form-label">그룹</label>
+                                    <select class="form-select" id="proxyGroup">
+                                        <option value="">그룹을 선택하세요</option>
+                                        <!-- 그룹 옵션들이 동적으로 로드됩니다 -->
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="proxyPassword" class="form-label">비밀번호</label>
+                                    <input type="password" class="form-control" id="proxyPassword" placeholder="SSH 비밀번호">
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <!-- 빈 공간 -->
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label for="proxyDescription" class="form-label">설명</label>
+                            <textarea class="form-control" id="proxyDescription" rows="2" placeholder="프록시 서버에 대한 설명을 입력하세요"></textarea>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="proxyIsActive">
+                                    <label class="form-check-label" for="proxyIsActive">
+                                        활성화 상태로 시작
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="proxyIsMain">
+                                    <label class="form-check-label" for="proxyIsMain">
+                                        메인 클러스터로 지정
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer border-0">
+                    <button type="button" class="btn btn-light" onclick="closeModal()">취소</button>
+                    <button type="button" class="btn btn-primary" id="saveButton" onclick="saveProxy()">
+                        저장
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- 애플리케이션 스크립트 -->
+    <script src="/static/js/app.js"></script>
 </body>
 </html>
