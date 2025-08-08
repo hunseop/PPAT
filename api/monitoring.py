@@ -1,7 +1,7 @@
 """모니터링 API"""
 
 from flask import Blueprint, jsonify, request
-from models import ProxyServer, db
+from models import ProxyServer, MonitoringConfig, db
 from monitoring_module import ProxyMonitor
 import logging
 
@@ -276,4 +276,113 @@ def get_monitoring_summary():
         
     except Exception as e:
         logger.error(f"모니터링 요약 조회 실패: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@monitoring_bp.route('/config', methods=['GET'])
+def get_monitoring_config():
+    """활성 모니터링 설정 조회"""
+    try:
+        config = MonitoringConfig.query.filter_by(is_active=True).first()
+        if not config:
+            return jsonify({'error': '활성화된 모니터링 설정이 없습니다.'}), 404
+        return jsonify(config.to_dict())
+    except Exception as e:
+        logger.error(f"모니터링 설정 조회 실패: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@monitoring_bp.route('/config', methods=['PUT'])
+def update_monitoring_config():
+    """활성 모니터링 설정 수정 (SNMP OIDs, session_cmd, 임계치 등)"""
+    try:
+        config = MonitoringConfig.query.filter_by(is_active=True).first()
+        if not config:
+            return jsonify({'error': '활성화된 모니터링 설정이 없습니다.'}), 404
+
+        data = request.get_json() or {}
+
+        if 'snmp_oids' in data and isinstance(data['snmp_oids'], dict):
+            config.snmp_oids = data['snmp_oids']
+        if 'session_cmd' in data and isinstance(data['session_cmd'], str):
+            config.session_cmd = data['session_cmd']
+        if 'cpu_threshold' in data:
+            config.cpu_threshold = int(data['cpu_threshold'])
+        if 'memory_threshold' in data:
+            config.memory_threshold = int(data['memory_threshold'])
+        if 'default_interval' in data:
+            config.default_interval = int(data['default_interval'])
+
+        db.session.commit()
+        return jsonify({'success': True, 'config': config.to_dict()})
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"모니터링 설정 수정 실패: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@monitoring_bp.route('/sessions', methods=['GET'])
+def get_sessions():
+    """활성 프록시들에 대한 세션 목록/요약 조회"""
+    try:
+        active_proxies = ProxyServer.query.filter_by(is_active=True).all()
+        results = []
+        for proxy in active_proxies:
+            try:
+                if not proxy.username or not proxy.password:
+                    continue
+                monitor = ProxyMonitor(
+                    host=proxy.host,
+                    username=proxy.username,
+                    password=proxy.password,
+                    ssh_port=proxy.ssh_port,
+                    snmp_port=proxy.snmp_port,
+                    snmp_community=proxy.snmp_community
+                )
+                info = monitor.get_session_info()
+                results.append({
+                    'proxy_id': proxy.id,
+                    'proxy_name': proxy.name,
+                    'host': proxy.host,
+                    'group_name': proxy.group.name if proxy.group else None,
+                    'is_main': proxy.is_main,
+                    'unique_clients': info.get('unique_clients', 0),
+                    'total_sessions': info.get('total_sessions', 0),
+                    'sessions': info.get('sessions', [])
+                })
+            except Exception as e:
+                logger.error(f"세션 조회 실패 ({proxy.name}): {e}")
+        return jsonify({'success': True, 'data': results})
+    except Exception as e:
+        logger.error(f"세션 목록 조회 실패: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@monitoring_bp.route('/sessions/<int:proxy_id>', methods=['GET'])
+def get_sessions_by_proxy(proxy_id):
+    """특정 프록시 세션 조회"""
+    try:
+        proxy = ProxyServer.query.get_or_404(proxy_id)
+        if not proxy.is_active:
+            return jsonify({'error': '비활성 프록시입니다.'}), 400
+        if not proxy.username or not proxy.password:
+            return jsonify({'error': 'SSH 자격 증명이 없습니다.'}), 400
+
+        monitor = ProxyMonitor(
+            host=proxy.host,
+            username=proxy.username,
+            password=proxy.password,
+            ssh_port=proxy.ssh_port,
+            snmp_port=proxy.snmp_port,
+            snmp_community=proxy.snmp_community
+        )
+        info = monitor.get_session_info()
+        return jsonify({
+            'proxy_id': proxy.id,
+            'proxy_name': proxy.name,
+            'host': proxy.host,
+            'group_name': proxy.group.name if proxy.group else None,
+            'is_main': proxy.is_main,
+            'unique_clients': info.get('unique_clients', 0),
+            'total_sessions': info.get('total_sessions', 0),
+            'sessions': info.get('sessions', [])
+        })
+    except Exception as e:
+        logger.error(f"특정 프록시 세션 조회 실패: {e}")
         return jsonify({'error': str(e)}), 500

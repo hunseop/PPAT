@@ -15,6 +15,9 @@ let monitoringIntervalTime = 30; // 기본 30초
 let isMonitoringActive = false;
 let nextUpdateTimeout = null;
 
+// 세션 브라우저 데이터
+let sessions = [];
+
 // DOM 로드 완료 후 초기화
 document.addEventListener('DOMContentLoaded', function() {
     console.log('PPAT 시스템 초기화 중...');
@@ -34,6 +37,9 @@ document.addEventListener('DOMContentLoaded', function() {
             loadGroups();
         }
     }, 30000);
+
+    // 관리 탭의 모니터링 설정 초기 로드
+    loadMonitoringConfig();
 });
 
 // 탭 전환 함수
@@ -43,6 +49,8 @@ function showTab(tabName) {
     // 모든 탭 숨기기
     document.getElementById('managementTab').style.display = 'none';
     document.getElementById('resourcesTab').style.display = 'none';
+    const sessionsTab = document.getElementById('sessionsTab');
+    if (sessionsTab) sessionsTab.style.display = 'none';
     
     // 네비게이션 활성 클래스 제거
     document.querySelectorAll('.nav-link').forEach(link => {
@@ -55,14 +63,64 @@ function showTab(tabName) {
         document.querySelector('a[onclick="showTab(\'management\')"]').classList.add('active');
         loadGroups();
         loadProxies();
+        loadMonitoringConfig();
     } else if (tabName === 'resources') {
         document.getElementById('resourcesTab').style.display = 'block';
         document.querySelector('a[onclick="showTab(\'resources\')"]').classList.add('active');
-        loadResourcesData();
-        loadMonitoringSummary();
+        // 자동 호출 제거: 수동 시작만 가능
+        // loadResourcesData();
+        // loadMonitoringSummary();
+    } else if (tabName === 'sessions') {
+        if (sessionsTab) sessionsTab.style.display = 'block';
+        document.querySelector('a[onclick="showTab(\'sessions\')"]').classList.add('active');
+        populateSessionProxySelect();
     }
     
     currentTab = tabName;
+}
+
+// ==================== 관리 탭: 모니터링 설정 CRUD ====================
+async function loadMonitoringConfig() {
+    try {
+        const res = await fetch('/api/monitoring/config');
+        if (!res.ok) return;
+        const cfg = await res.json();
+        document.getElementById('configSessionCmd').value = cfg.session_cmd || '';
+        document.getElementById('configSnmpOids').value = JSON.stringify(cfg.snmp_oids || {}, null, 2);
+        document.getElementById('configCpuThreshold').value = cfg.cpu_threshold ?? 80;
+        document.getElementById('configMemoryThreshold').value = cfg.memory_threshold ?? 80;
+        document.getElementById('configDefaultInterval').value = cfg.default_interval ?? 30;
+    } catch (e) {
+        console.error('모니터링 설정 로드 실패:', e);
+    }
+}
+
+async function saveMonitoringConfig() {
+    try {
+        const snmpText = document.getElementById('configSnmpOids').value || '{}';
+        let snmpObj = {};
+        try { snmpObj = JSON.parse(snmpText); } catch (e) { return showNotification('SNMP OIDs JSON 형식이 올바르지 않습니다.', 'warning'); }
+        const body = {
+            session_cmd: document.getElementById('configSessionCmd').value,
+            snmp_oids: snmpObj,
+            cpu_threshold: parseInt(document.getElementById('configCpuThreshold').value) || 80,
+            memory_threshold: parseInt(document.getElementById('configMemoryThreshold').value) || 80,
+            default_interval: parseInt(document.getElementById('configDefaultInterval').value) || 30,
+        };
+        const res = await fetch('/api/monitoring/config', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+        });
+        if (res.ok) {
+            showNotification('모니터링 설정이 저장되었습니다.', 'success');
+        } else {
+            const txt = await res.text();
+            showNotification(`저장 실패: ${txt}`, 'danger');
+        }
+    } catch (e) {
+        showNotification('설정 저장 중 오류가 발생했습니다.', 'danger');
+    }
 }
 
 // ==================== 프록시 그룹 관리 ====================
@@ -720,6 +778,9 @@ function startMonitoring() {
     
     // UI 업데이트
     updateMonitoringUI();
+    // 수동 새로고침 버튼 활성화
+    const refreshBtn = document.getElementById('manualRefreshBtn');
+    if (refreshBtn) refreshBtn.disabled = false;
     
     // 즉시 첫 번째 데이터 로드
     loadResourcesData();
@@ -755,6 +816,10 @@ function stopMonitoring() {
         nextUpdateTimeout = null;
     }
     
+    // 수동 새로고침 버튼 비활성화
+    const refreshBtn = document.getElementById('manualRefreshBtn');
+    if (refreshBtn) refreshBtn.disabled = true;
+
     // UI 업데이트
     updateMonitoringUI();
     document.getElementById('nextUpdate').textContent = '-';
@@ -864,4 +929,76 @@ function getIconForType(type) {
         case 'warning': return 'fa-exclamation-triangle';
         default: return 'fa-info-circle';
     }
+}
+
+// ==================== 세션 브라우저 ====================
+function populateSessionProxySelect() {
+    const select = document.getElementById('sessionProxySelect');
+    if (!select) return;
+    select.innerHTML = '';
+    const allOption = document.createElement('option');
+    allOption.value = '';
+    allOption.textContent = '전체 활성 프록시';
+    select.appendChild(allOption);
+    proxies
+        .filter(p => p.is_active)
+        .forEach(p => {
+            const opt = document.createElement('option');
+            opt.value = p.id;
+            opt.textContent = `${p.name} (${p.host})`;
+            select.appendChild(opt);
+        });
+}
+
+async function loadSessions() {
+    const select = document.getElementById('sessionProxySelect');
+    const proxyId = select && select.value ? parseInt(select.value) : null;
+    try {
+        const url = proxyId ? `/api/monitoring/sessions/${proxyId}` : '/api/monitoring/sessions';
+        const res = await fetch(url);
+        if (!res.ok) {
+            const txt = await res.text();
+            return showNotification(`세션 조회 실패: ${txt}`, 'danger');
+        }
+        const data = await res.json();
+        sessions = proxyId ? [data] : (data.data || []);
+        updateSessionsTable(sessions);
+    } catch (e) {
+        console.error('세션 로드 오류:', e);
+        showNotification('세션 로드 중 오류가 발생했습니다.', 'danger');
+    }
+}
+
+function updateSessionsTable(items) {
+    const tbody = document.getElementById('sessionsTableBody');
+    const emptyMessage = document.getElementById('sessionsEmptyMessage');
+    if (!tbody) return;
+
+    if (!items || items.length === 0) {
+        tbody.innerHTML = '';
+        if (emptyMessage) emptyMessage.style.display = 'block';
+        return;
+    }
+
+    if (emptyMessage) emptyMessage.style.display = 'none';
+
+    const rows = [];
+    items.forEach(item => {
+        const proxyName = item.proxy_name || item.host || '';
+        (item.sessions || []).forEach(s => {
+            rows.push(`
+                <tr>
+                    <td class="ps-3">${proxyName}</td>
+                    <td>${s['Client IP'] || '-'}</td>
+                    <td>${s['Server IP'] || '-'}</td>
+                    <td>${s['Protocol'] || '-'}</td>
+                    <td>${s['User'] || '-'}</td>
+                    <td>${s['Policy'] || '-'}</td>
+                    <td>${s['Category'] || s['Rule'] || '-'}</td>
+                </tr>
+            `);
+        });
+    });
+
+    tbody.innerHTML = rows.join('');
 }
