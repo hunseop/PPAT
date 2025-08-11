@@ -9,7 +9,7 @@ def create_app():
     
     # 설정
     app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key')
-    app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///proxy_monitoring.db')
+    app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///ppat.db')
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
     
     # 데이터베이스 초기화
