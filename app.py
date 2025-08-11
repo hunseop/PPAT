@@ -61,7 +61,7 @@ def create_app():
                     'HTTPS': '1.3.6.1.2.1.25.4.2.1.3',
                     'FTP': '1.3.6.1.2.1.25.4.2.1.4'
                 },
-                session_cmd="/opt/mwg/bin/mwg-core -S connections | sed -E 's/\\s*\\|\\s*/ | /g'",
+                session_cmd="/opt/mwg/bin/mwg-core -S connections",
                 cpu_threshold=80,
                 memory_threshold=80,
                 default_interval=30,
