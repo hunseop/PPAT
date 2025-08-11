@@ -20,7 +20,6 @@ let sessions = [];
 let resourcesGroupId = null;
 let sessionsGroupId = null;
 let sessionsProxyId = null;
-let sessionHeaders = [];
 let sessionFilters = { protocol: '', status: '', client_ip: '', server_ip: '', user: '', url: '', q: '' };
 let sessionPage = 1;
 let sessionPageSize = 100;
@@ -1000,7 +999,7 @@ async function loadSessions() {
             return showNotification('그룹 또는 프록시를 선택하세요.', 'warning');
         }
         const params = new URLSearchParams();
-        if (!proxyId && sessionsGroupId) params.set('group_id', sessionsGroupId); params.set('persist','1'); }
+        if (!proxyId && sessionsGroupId) { params.set('group_id', sessionsGroupId); params.set('persist','1'); }
         const url = proxyId ? `/api/monitoring/sessions/${proxyId}?persist=1` : `/api/monitoring/sessions?${params.toString()}`;
         const res = await fetch(url);
         if (!res.ok) {
