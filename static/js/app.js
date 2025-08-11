@@ -998,7 +998,7 @@ async function loadSessions() {
             return showNotification('그룹 또는 프록시를 선택하세요.', 'warning');
         }
         const params = new URLSearchParams();
-        if (!proxyId && sessionsGroupId) { params.set('group_id', sessionsGroupId); params.set('persist','1'); }
+        if (!proxyId && sessionsGroupId) params.set('group_id', sessionsGroupId); params.set('persist','1'); }
         const url = proxyId ? `/api/monitoring/sessions/${proxyId}?persist=1` : `/api/monitoring/sessions?${params.toString()}`;
         const res = await fetch(url);
         if (!res.ok) {
@@ -1052,34 +1052,12 @@ function renderSessionsTable(items) {
             const user = s['User Name'] || s['User'] || '';
             const url = s['URL'] || '';
             const status = s['Status'] || s['Age(seconds) Status'] || '';
-            const ctime = s['Creation Time'] || '';
-            const cust = s['Cust ID'] || '';
-            const c_mwg = s['Client Side MWG IP'] || '';
-            const s_mwg = s['Server Side MWG IP'] || '';
-            const cl_br = s['CL Bytes Received'] || '';
-            const cl_bs = s['CL Bytes Sent'] || '';
-            const srv_br = s['SRV Bytes Received'] || '';
-            const srv_bs = s['SRV Bytes Sent'] || '';
-            const trxn = s['Trxn Index'] || '';
-            const age = s['Age(seconds)'] || '';
-            const inuse = s['In use'] || '';
             tds.push(`<td>${escapeHtml(client_ip || '-')}</td>`);
             tds.push(`<td>${escapeHtml(server_ip || '-')}</td>`);
             tds.push(`<td>${escapeHtml(protocol || '-')}</td>`);
             tds.push(`<td>${escapeHtml(user || '-')}</td>`);
             tds.push(`<td class=\"truncate\">${escapeHtml(url || '-')}</td>`);
             tds.push(`<td>${escapeHtml(status || '-')}</td>`);
-            tds.push(`<td>${escapeHtml(ctime || '-')}</td>`);
-            tds.push(`<td>${escapeHtml(cust || '-')}</td>`);
-            tds.push(`<td>${escapeHtml(c_mwg || '-')}</td>`);
-            tds.push(`<td>${escapeHtml(s_mwg || '-')}</td>`);
-            tds.push(`<td>${escapeHtml(String(cl_br || '-'))}</td>`);
-            tds.push(`<td>${escapeHtml(String(cl_bs || '-'))}</td>`);
-            tds.push(`<td>${escapeHtml(String(srv_br || '-'))}</td>`);
-            tds.push(`<td>${escapeHtml(String(srv_bs || '-'))}</td>`);
-            tds.push(`<td>${escapeHtml(String(trxn || '-'))}</td>`);
-            tds.push(`<td>${escapeHtml(String(age || '-'))}</td>`);
-            tds.push(`<td>${escapeHtml(inuse || '-')}</td>`);
             rows.push(`<tr>${tds.join('')}</tr>`);
         });
     });
@@ -1187,17 +1165,18 @@ function changeSessionPageSize(v) {
 function downloadSessionsCsv() {
     const params = new URLSearchParams();
     if (sessionsGroupId) params.set('group_id', sessionsGroupId);
-    const px = document.getElementById('sessionProxySelect');
-    const proxyId = px && px.value ? parseInt(px.value) : null;
-    if (proxyId) params.set('proxy_id', proxyId);
-    if (sessionFilters.q) params.set('q', sessionFilters.q);
-    if (sessionFilters.protocol) params.set('protocol', sessionFilters.protocol);
-    if (sessionFilters.status) params.set('status', sessionFilters.status);
-    if (sessionFilters.client_ip) params.set('client_ip', sessionFilters.client_ip);
-    if (sessionFilters.server_ip) params.set('server_ip', sessionFilters.server_ip);
-    if (sessionFilters.user) params.set('user', sessionFilters.user);
-    if (sessionFilters.url) params.set('url', sessionFilters.url);
-    window.location.href = `/api/monitoring/sessions/export?${params.toString()}`;
+     const px = document.getElementById('sessionProxySelect');
+     const proxyId = px && px.value ? parseInt(px.value) : null;
+     if (proxyId) params.set('proxy_id', proxyId);
+     if (sessionFilters.q) params.set('q', sessionFilters.q);
+     if (sessionFilters.protocol) params.set('protocol', sessionFilters.protocol);
+     if (sessionFilters.status) params.set('status', sessionFilters.status);
+     if (sessionFilters.client_ip) params.set('client_ip', sessionFilters.client_ip);
+     if (sessionFilters.server_ip) params.set('server_ip', sessionFilters.server_ip);
+     if (sessionFilters.user) params.set('user', sessionFilters.user);
+     if (sessionFilters.url) params.set('url', sessionFilters.url);
+     // enforce CSV fieldnames mapping on server; just pass filters and ids
+     window.location.href = `/api/monitoring/sessions/export?${params.toString()}`;
 }
 
 function escapeHtml(s) {
