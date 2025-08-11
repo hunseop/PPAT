@@ -78,7 +78,7 @@ if __name__ == '__main__':
     
     # 프록시 매니저 초기화 (앱 생성 후)
     with app.app_context():
-        from unified import device_manager
+        from backend import device_manager
         device_manager.reload()
     
     print(f"🚀 프록시 모니터링 시스템 시작")

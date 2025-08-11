@@ -19,7 +19,7 @@
 
 ### 1. 필요한 패키지 설치
 ```bash
-pip install --break-system-packages flask flask-sqlalchemy paramiko
+pip install --break-system-packages -r requirements.txt
 ```
 
 ### 2. 애플리케이션 실행
@@ -69,12 +69,16 @@ http://localhost:5007
 ├── app.py                      # 메인 애플리케이션
 ├── models.py                   # 데이터베이스 모델
 ├── requirements.txt            # 필요한 패키지
-├── proxy_module/               # 프록시 관리 모듈
-│   ├── __init__.py
-│   ├── proxy_client.py        # SSH 연결 클라이언트
-│   └── proxy_manager.py       # 프록시 통합 관리자
+├── backend/                    # 단일 백엔드 모듈
+│   ├── __init__.py             # ProxyClient, ProxyMonitor, managers, services 재노출
+│   ├── proxy_client.py         # SSH 연결 클라이언트
+│   ├── proxy_manager.py        # 프록시 통합 관리자
+│   ├── monitoring.py           # 모니터링 로직
+│   ├── utils.py                # 공용 유틸리티
+│   └── services.py             # device_manager, monitoring_service
 ├── api/
-│   └── proxy.py               # 프록시 관리 API
+│   ├── proxy.py                # 프록시 관리 API
+│   └── monitoring.py           # 모니터링 API
 └── static/
     ├── index.html             # 메인 페이지
     └── js/
@@ -108,7 +112,7 @@ http://localhost:5007
 - 프록시 서버 CRUD 기능
 - 실제 SSH 연결 테스트
 - 실시간 상태 모니터링
-- proxy_module을 통한 고급 기능
+- 단일 `backend` 모듈로 구조 간소화
 
 🚧 **개발 예정**
 - 자원사용률 페이지
@@ -119,5 +123,5 @@ http://localhost:5007
 
 - **미니멀 디자인**: 불필요한 요소 제거, 핵심 기능에 집중
 - **실제 SSH 연결**: Paramiko를 통한 정확한 연결 상태 확인
-- **모듈화된 구조**: proxy_module을 통한 체계적인 프록시 관리
+- **단일 모듈 구조**: `backend` 하나로만 사용, 관리 간소화
 - **확장 가능**: 추가 페이지를 위한 탭 구조 준비
