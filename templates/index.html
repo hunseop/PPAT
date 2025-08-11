@@ -7,10 +7,12 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
       /* 세션 테이블 UX 개선 */
+      .sessions-table { font-size: 0.875rem; }
       .sessions-table th, .sessions-table td { vertical-align: middle; }
       .sessions-table td.truncate { max-width: 480px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
       .sessions-table thead th.sticky-col, .sessions-table tbody td.sticky-col { position: sticky; left: 0; background: #fff; z-index: 2; }
       .sessions-table thead th.sticky-col { z-index: 3; }
+      .sessions-table thead th { position: sticky; top: 0; background: #f8f9fa; z-index: 5; }
     </style>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
 </head>
@@ -310,11 +312,17 @@
                             </div>
                             <div class="card-body p-0">
                                 <div class="table-responsive" style="max-height: 520px; overflow: auto;">
-                                    <table class="table table-hover mb-0 sessions-table">
+                                    <table class="table table-hover table-sm mb-0 sessions-table">
                                         <thead class="table-light" id="sessionsTableHead">
                                             <tr>
                                                 <th class="border-0 ps-3 sticky-col">Proxy</th>
-                                                <!-- 동적 헤더가 여기에 렌더링됩니다 -->
+                                                <th class="border-0">Client IP</th>
+                                                <th class="border-0">Server IP</th>
+                                                <th class="border-0">Protocol</th>
+                                                <th class="border-0">User</th>
+                                                <th class="border-0">URL</th>
+                                                <th class="border-0">Status</th>
+                                                <th class="border-0">Creation Time</th>
                                             </tr>
                                         </thead>
                                         <tbody id="sessionsTableBody"></tbody>

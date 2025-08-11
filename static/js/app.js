@@ -1027,17 +1027,11 @@ async function loadSessions() {
     }
 }
 
-function renderSessionsTable(items, headers) {
+function renderSessionsTable(items) {
     const thead = document.getElementById('sessionsTableHead');
     const tbody = document.getElementById('sessionsTableBody');
     const emptyMessage = document.getElementById('sessionsEmptyMessage');
     if (!tbody || !thead) return;
-
-    // 헤더 렌더링
-    const headerCells = ['<th class="border-0 ps-3 sticky-col">Proxy</th>'].concat(
-        headers.map(h => `<th class="border-0">${escapeHtml(h)}</th>`) 
-    );
-    thead.innerHTML = `<tr>${headerCells.join('')}</tr>`;
 
     if (!items || items.length === 0) {
         tbody.innerHTML = '';
@@ -1052,13 +1046,20 @@ function renderSessionsTable(items, headers) {
         const proxyName = item.proxy_name || item.host || '';
         (item.sessions || []).forEach(s => {
             const tds = [`<td class="ps-3 sticky-col">${proxyName}</td>`];
-            headers.forEach(h => {
-                let val = s[h];
-                if (h === 'User Name' && !val) val = s['User'];
-                if (h === 'Age(seconds)' && !val) val = s['Status'] || s['Age(seconds) Status'];
-                val = (val === undefined || val === null || val === '') ? '-' : val;
-                tds.push(`<td class="truncate">${escapeHtml(String(val))}</td>`);
-            });
+            const client_ip = s['Client IP'] || s['ClientIP'] || '';
+            const server_ip = s['Server IP'] || s['ServerIP'] || '';
+            const protocol = s['Protocol'] || '';
+            const user = s['User Name'] || s['User'] || '';
+            const url = s['URL'] || '';
+            const status = s['Status'] || s['Age(seconds) Status'] || '';
+            const ctime = s['Creation Time'] || '';
+            tds.push(`<td>${escapeHtml(client_ip || '-')}</td>`);
+            tds.push(`<td>${escapeHtml(server_ip || '-')}</td>`);
+            tds.push(`<td>${escapeHtml(protocol || '-')}</td>`);
+            tds.push(`<td>${escapeHtml(user || '-')}</td>`);
+            tds.push(`<td class="truncate">${escapeHtml(url || '-')}</td>`);
+            tds.push(`<td>${escapeHtml(status || '-')}</td>`);
+            tds.push(`<td>${escapeHtml(ctime || '-')}</td>`);
             rows.push(`<tr>${tds.join('')}</tr>`);
         });
     });
