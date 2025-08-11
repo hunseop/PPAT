@@ -1,4 +1,4 @@
-"""프록시 매니저 모듈"""
+"""프록시 매니저 모듈 (platform)"""
 
 import threading
 import time

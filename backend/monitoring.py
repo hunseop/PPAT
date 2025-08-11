@@ -1,7 +1,4 @@
-"""통합 프록시 모니터링 클래스
-
-프록시 서버의 연결 테스트, 상태 확인, 리소스 모니터링을 통합 제공합니다.
-"""
+"""통합 프록시 모니터링 클래스 (platform)"""
 
 import paramiko
 import time
@@ -12,7 +9,7 @@ from .utils import get_current_timestamp, validate_resource_data, logger, split_
 
 # SNMP import with error handling
 try:
-    from pysnmp.hlapi import *
+    from pysnmp.hlapi import *  # type: ignore
     SNMP_AVAILABLE = True
 except ImportError:
     SNMP_AVAILABLE = False

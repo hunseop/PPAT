@@ -1,4 +1,4 @@
-"""프록시 클라이언트 모듈"""
+"""프록시 클라이언트 모듈 (platform)"""
 
 import paramiko
 import socket
