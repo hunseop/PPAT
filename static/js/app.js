@@ -108,10 +108,7 @@ function showTab(tabName) {
         document.querySelector('a[onclick="showTab(\'sessions\')"]').classList.add('active');
         populateSessionProxySelect();
         initGroupSelectors();
-        // 초기 로드
-        loadSessions();
-        // 필터 바인딩
-        bindSessionFilters();
+        // 자동 조회 없음: 사용자가 명시적으로 조회/저장 버튼을 눌러야 함
     }
     
     currentTab = tabName;
@@ -994,7 +991,13 @@ async function loadSessions() {
     const select = document.getElementById('sessionProxySelect');
     const proxyId = select && select.value ? parseInt(select.value) : null;
     try {
-        const url = proxyId ? `/api/monitoring/sessions/${proxyId}` : '/api/monitoring/sessions';
+        // 그룹 또는 프록시를 선택한 경우에만 조회
+        if (!proxyId && !sessionsGroupId) {
+            return showNotification('그룹 또는 프록시를 선택하세요.', 'warning');
+        }
+        const params = new URLSearchParams();
+        if (!proxyId && sessionsGroupId) params.set('group_id', sessionsGroupId);
+        const url = proxyId ? `/api/monitoring/sessions/${proxyId}` : `/api/monitoring/sessions?${params.toString()}`;
         const res = await fetch(url);
         if (!res.ok) {
             const txt = await res.text();
@@ -1061,16 +1064,18 @@ function renderSessionsTable(items, headers) {
 }
 
 async function collectSessionsByGroup() {
+    const sel = document.getElementById('sessionGroupSelect');
+    sessionsGroupId = sel && sel.value ? parseInt(sel.value) : null;
     if (!sessionsGroupId) return showNotification('그룹을 선택하세요.', 'warning');
     try {
         const res = await fetch(`/api/monitoring/sessions/group/${sessionsGroupId}?persist=1`);
         if (!res.ok) {
             const txt = await res.text();
-            return showNotification(`수집 실패: ${txt}`, 'danger');
+            return showNotification(`저장 실패: ${txt}`, 'danger');
         }
-        showNotification('세션 수집이 완료되었습니다.', 'success');
+        showNotification('세션 저장이 완료되었습니다.', 'success');
     } catch (e) {
-        showNotification('세션 수집 중 오류가 발생했습니다.', 'danger');
+        showNotification('세션 저장 중 오류가 발생했습니다.', 'danger');
     }
 }
 

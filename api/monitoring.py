@@ -216,7 +216,11 @@ def update_monitoring_config():
 def get_sessions():
     """활성 프록시들에 대한 세션 목록/요약 조회"""
     try:
-        active_proxies = ProxyServer.query.filter_by(is_active=True).all()
+        group_id = request.args.get('group_id', type=int)
+        query = ProxyServer.query.filter_by(is_active=True)
+        if group_id:
+            query = query.filter(ProxyServer.group_id == group_id)
+        active_proxies = query.all()
         results = []
         for proxy in active_proxies:
             try:

@@ -138,16 +138,43 @@ class MonitoringService:
                 snmp_community=proxy.snmp_community
             )
             info = monitor.get_session_info()
+
+            def pick(session: dict, keys: list[str]) -> str:
+                # 후보 키들 중 첫번째로 값이 존재하는 것을 선택 (대소문자/공백 차이 보정)
+                if not session:
+                    return ''
+                # 키 정규화 맵
+                normalized = {}
+                for k, v in session.items():
+                    normalized[''.join(k.lower().split())] = v
+                for key in keys:
+                    nk = ''.join(key.lower().split())
+                    if nk in normalized and normalized[nk] not in (None, ''):
+                        return str(normalized[nk])
+                return ''
+
+            def strip_port(ip: str) -> str:
+                if not ip:
+                    return ''
+                return ip.split(':')[0]
+
             for s in info.get('sessions', []):
+                client_ip = strip_port(pick(s, ['Client IP', 'ClientIP', 'Client Address', 'Client']))
+                server_ip = strip_port(pick(s, ['Server IP', 'ServerIP', 'Server Address', 'Server']))
+                protocol = pick(s, ['Protocol', 'Proto'])
+                user = pick(s, ['User Name', 'User', 'Username', 'UserName'])
+                url = pick(s, ['URL', 'Uri', 'Request URL'])
+                status = pick(s, ['Status', 'Age(seconds) Status', 'In use'])
+
                 rec = SessionRecord(
                     group_id=group_id,
                     proxy_id=proxy.id,
-                    client_ip=s.get('Client IP') or (s.get('ClientIP') or ''),
-                    server_ip=s.get('Server IP') or (s.get('ServerIP') or ''),
-                    protocol=s.get('Protocol') or '',
-                    user=s.get('User Name') or s.get('User') or '',
-                    policy=s.get('URL') or '',
-                    category=s.get('Age(seconds) Status') or s.get('Status') or '',
+                    client_ip=client_ip,
+                    server_ip=server_ip,
+                    protocol=protocol,
+                    user=user,
+                    policy=url,
+                    category=status,
                     extra=s
                 )
                 db.session.add(rec)
