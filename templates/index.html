@@ -5,16 +5,23 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PPAT - 프록시 모니터링 시스템</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <style>
-      /* 세션 테이블 UX 개선 */
-      .sessions-table { font-size: 0.875rem; }
-      .sessions-table th, .sessions-table td { vertical-align: middle; }
-      .sessions-table td.truncate { max-width: 480px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-      .sessions-table thead th.sticky-col, .sessions-table tbody td.sticky-col { position: sticky; left: 0; background: #fff; z-index: 2; }
-      .sessions-table thead th.sticky-col { z-index: 3; }
-      .sessions-table thead th { position: sticky; top: 0; background: #f8f9fa; z-index: 5; }
-    </style>
+    <link href="https://cdn.datatables.net/1.13.7/css/dataTables.bootstrap5.min.css" rel="stylesheet">
+    <link href="https://cdn.datatables.net/buttons/2.4.2/css/buttons.bootstrap5.min.css" rel="stylesheet">
+    <link href="https://cdn.datatables.net/responsive/2.5.0/css/responsive.bootstrap5.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+      /* DataTables 커스텀 스타일 */
+      .dataTables_wrapper { font-size: 0.875rem; }
+      .dataTables_wrapper .dt-buttons { margin-bottom: 1rem; }
+      .dataTables_wrapper .dataTables_filter { margin-bottom: 1rem; }
+      .dataTables_wrapper .table td { vertical-align: middle; }
+      .dataTables_wrapper .table td.truncate { max-width: 480px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      /* 반응형 조정 */
+      @media screen and (max-width: 768px) {
+        .dataTables_wrapper .dt-buttons { text-align: center; margin-bottom: 0.5rem; }
+        .dataTables_wrapper .dataTables_filter { text-align: center; }
+      }
+    </style>
 </head>
 <body class="bg-light">
     <div id="app">
@@ -213,8 +220,8 @@
                                 <h6 class="mb-0 text-muted">모니터링 설정</h6>
                                 <div class="d-flex align-items-center gap-2">
                                     <span class="badge" id="monitoringStatus">정지됨</span>
-                                    <button class="btn btn-sm btn-success" id="startMonitoringBtn" onclick="startMonitoring()">시작</button>
-                                    <button class="btn btn-sm btn-danger" id="stopMonitoringBtn" onclick="stopMonitoring()" disabled>중지</button>
+                                    <button class="btn btn-sm btn-success" id="startMonitoringBtn" onclick="MonitoringController.startMonitoring()">시작</button>
+                                    <button class="btn btn-sm btn-danger" id="stopMonitoringBtn" onclick="MonitoringController.stopMonitoring()" disabled>중지</button>
                                     <button class="btn btn-sm btn-outline-primary" id="manualRefreshBtn" onclick="refreshResources()" disabled>수동 새로고침</button>
                                 </div>
                             </div>
@@ -222,7 +229,7 @@
                                 <div class="row align-items-center">
                                     <div class="col-md-3">
                                         <label for="monitoringInterval" class="form-label small">갱신 주기 (초)</label>
-                                        <select class="form-select form-select-sm" id="monitoringInterval" onchange="updateMonitoringInterval()">
+                                        <select class="form-select form-select-sm" id="monitoringInterval" onchange="MonitoringController.updateInterval(this.value)">
                                             <option value="10">10초</option>
                                             <option value="30" selected>30초</option>
                                             <option value="60">1분</option>
@@ -306,43 +313,27 @@
                                         <select id="sessionGroupSelect" class="form-select form-select-sm" style="min-width: 200px;"></select>
                                                                                  <select id="sessionProxySelect" class="form-select form-select-sm" style="min-width: 220px;"></select>
                                          <button class="btn btn-sm btn-outline-primary" onclick="loadSessions()">조회</button>
-                                         <button class="btn btn-sm btn-outline-secondary" onclick="collectSessionsByGroup()">저장</button>
-                                         <small class="text-muted">(조회는 실시간, 저장은 DB)</small>
                                     </div>
                             </div>
                             <div class="card-body p-0">
-                                <div class="d-flex align-items-center justify-content-between p-2 border-bottom">
-                                    <div class="d-flex align-items-center gap-2">
-                                        <label class="small text-muted">페이지당</label>
-                                        <select id="sessionPageSize" class="form-select form-select-sm" style="width: 90px;" onchange="changeSessionPageSize(this.value)">
-                                            <option value="50">50</option>
-                                            <option value="100" selected>100</option>
-                                            <option value="200">200</option>
-                                        </select>
-                                        <input id="sessionSearchInput" type="text" class="form-control form-control-sm" placeholder="검색어 (IP, User, URL 등)" style="min-width: 280px;">
-                                        <button class="btn btn-sm btn-primary" onclick="searchSessions()">검색</button>
-                                        <button class="btn btn-sm btn-outline-success" onclick="downloadSessionsCsv()">CSV</button>
-                                    </div>
-                                    <div id="sessionsPagination"></div>
-                                </div>
-                                <div class="table-responsive" style="max-height: 520px; overflow: auto; overflow-x: auto;">
-                                    <table class="table table-hover table-sm mb-0 sessions-table" style="min-width: 1200px;">
-                                        <thead class="table-light" id="sessionsTableHead">
+                                <div class="table-responsive">
+                                    <table id="sessionsTable" class="table table-hover table-sm mb-0" style="width:100%">
+                                        <thead class="table-light">
                                             <tr>
-                                                <th class="border-0 ps-3 sticky-col">Proxy</th>
-                                                <th class="border-0">Client IP</th>
-                                                <th class="border-0">Server IP</th>
-                                                <th class="border-0">Protocol</th>
-                                                <th class="border-0">User</th>
-                                                <th class="border-0">URL</th>
-                                                <th class="border-0">Status</th>
+                                                <th>Proxy</th>
+                                                <th>Client IP</th>
+                                                <th>Server IP</th>
+                                                <th>Protocol</th>
+                                                <th>User</th>
+                                                <th>Policy</th>
+                                                <th>Category</th>
+                                                <th>Bytes Sent</th>
+                                                <th>Bytes Received</th>
+                                                <th>Age</th>
+                                                <th>Created At</th>
                                             </tr>
                                         </thead>
-                                        <tbody id="sessionsTableBody"></tbody>
                                     </table>
-                                </div>
-                                <div id="sessionsEmptyMessage" class="text-center py-5" style="display:none;">
-                                    <h6 class="text-muted">세션 데이터가 없습니다</h6>
                                 </div>
                             </div>
                         </div>
@@ -496,8 +487,24 @@
         </div>
     </div>
 
-    <!-- Bootstrap JS -->
+    <!-- jQuery, Bootstrap & DataTables JS -->
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- DataTables Core -->
+    <script src="https://cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.7/js/dataTables.bootstrap5.min.js"></script>
+    <!-- DataTables Buttons -->
+    <script src="https://cdn.datatables.net/buttons/2.4.2/js/dataTables.buttons.min.js"></script>
+    <script src="https://cdn.datatables.net/buttons/2.4.2/js/buttons.bootstrap5.min.js"></script>
+    <script src="https://cdn.datatables.net/buttons/2.4.2/js/buttons.html5.min.js"></script>
+    <script src="https://cdn.datatables.net/buttons/2.4.2/js/buttons.colVis.min.js"></script>
+    <!-- DataTables Responsive -->
+    <script src="https://cdn.datatables.net/responsive/2.5.0/js/dataTables.responsive.min.js"></script>
+    <script src="https://cdn.datatables.net/responsive/2.5.0/js/responsive.bootstrap5.min.js"></script>
+    <!-- Additional Dependencies -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.1.70/pdfmake.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.1.70/vfs_fonts.js"></script>
     
     <!-- 애플리케이션 스크립트 -->
     <script src="/static/js/app.js"></script>

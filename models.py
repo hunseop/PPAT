@@ -149,8 +149,6 @@ class SessionRecord(db.Model):
     in_use = db.Column(db.String(32))  # MWG는 Y/N 등 문자열일 수 있음
     url = db.Column(db.Text)
 
-    extra = db.Column(db.JSON)  # 원본 컬럼 전체를 JSON으로 보관
-
     created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
 
     def to_dict(self):
@@ -178,6 +176,5 @@ class SessionRecord(db.Model):
             'age_seconds': self.age_seconds,
             'in_use': self.in_use,
             'url': self.url,
-            'extra': self.extra,
             'created_at': self.created_at.isoformat() if self.created_at else None
         }

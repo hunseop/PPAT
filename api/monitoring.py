@@ -312,6 +312,93 @@ def collect_sessions_by_group(group_id):
         logger.error(f"그룹 세션 수집 실패: {e}")
         return jsonify({'error': str(e)}), 500
 
+@monitoring_bp.route('/sessions/datatables', methods=['GET'])
+def get_sessions_datatables():
+    """DataTables 서버 사이드 처리 API"""
+    try:
+        # DataTables 파라미터 파싱
+        draw = request.args.get('draw', type=int)
+        start = request.args.get('start', type=int, default=0)
+        length = request.args.get('length', type=int, default=10)
+        search_value = request.args.get('search[value]', type=str)
+        
+        # 정렬 파라미터
+        order_column = request.args.get('order[0][column]', type=int)
+        order_dir = request.args.get('order[0][dir]', type=str)
+        
+        # 컬럼 매핑
+        columns = ['proxy_id', 'client_ip', 'server_ip', 'protocol', 'user', 'policy', 
+                  'category', 'cl_bytes_sent', 'cl_bytes_received', 'age_seconds', 'created_at']
+        
+        # 필터 파라미터
+        group_id = request.args.get('group_id', type=int)
+        proxy_id = request.args.get('proxy_id', type=int)
+        
+        # 쿼리 구성
+        query = SessionRecord.query
+        
+        # 그룹/프록시 필터
+        if group_id:
+            query = query.filter(SessionRecord.group_id == group_id)
+        if proxy_id:
+            query = query.filter(SessionRecord.proxy_id == proxy_id)
+            
+        # 검색어 적용
+        if search_value:
+            search_filter = []
+            for column in ['client_ip', 'server_ip', 'protocol', 'user', 'policy', 'category']:
+                search_filter.append(getattr(SessionRecord, column).ilike(f'%{search_value}%'))
+            query = query.filter(db.or_(*search_filter))
+            
+        # 전체 레코드 수
+        total_records = query.count()
+        filtered_records = total_records
+        
+        # 정렬
+        if order_column is not None and order_dir:
+            column = columns[order_column]
+            if order_dir == 'desc':
+                query = query.order_by(db.desc(getattr(SessionRecord, column)))
+            else:
+                query = query.order_by(getattr(SessionRecord, column))
+        
+        # 페이징
+        query = query.offset(start).limit(length)
+        
+        # 결과 포맷팅
+        data = []
+        for record in query.all():
+            data.append([
+                record.proxy_id,
+                record.client_ip,
+                record.server_ip,
+                record.protocol,
+                record.user,
+                record.policy,
+                record.category,
+                record.cl_bytes_sent,
+                record.cl_bytes_received,
+                record.age_seconds,
+                record.created_at.isoformat() if record.created_at else None
+            ])
+        
+        return jsonify({
+            'draw': draw,
+            'recordsTotal': total_records,
+            'recordsFiltered': filtered_records,
+            'data': data
+        })
+        
+    except Exception as e:
+        logger.error(f"DataTables 데이터 조회 실패: {e}")
+        return jsonify({
+            'draw': request.args.get('draw', type=int),
+            'recordsTotal': 0,
+            'recordsFiltered': 0,
+            'data': [],
+            'error': str(e)
+        }), 500
+
 @monitoring_bp.route('/sessions/search', methods=['GET'])
 def search_sessions():
     """임시저장된 세션 검색. 파라미터: group_id, proxy_id, q(키워드), protocol, status, client_ip, server_ip, user, url, page, page_size"""
