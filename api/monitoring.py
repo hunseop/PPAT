@@ -217,10 +217,17 @@ def get_sessions():
     """활성 프록시들에 대한 세션 목록/요약 조회"""
     try:
         group_id = request.args.get('group_id', type=int)
+        persist = request.args.get('persist', default='0') == '1'
         query = ProxyServer.query.filter_by(is_active=True)
         if group_id:
             query = query.filter(ProxyServer.group_id == group_id)
         active_proxies = query.all()
+
+        # 선택적으로 그룹 전체를 DB에 저장 (조회 시 자동 저장 옵션)
+        saved = 0
+        if group_id and persist:
+            saved = monitoring_service.collect_sessions_by_group(group_id, persist=True)
+
         results = []
         for proxy in active_proxies:
             try:
@@ -248,7 +255,7 @@ def get_sessions():
                 })
             except Exception as e:
                 logger.error(f"세션 조회 실패 ({proxy.name}): {e}")
-        return jsonify({'success': True, 'data': results})
+        return jsonify({'success': True, 'data': results, 'saved': saved})
     except Exception as e:
         logger.error(f"세션 목록 조회 실패: {e}")
         return jsonify({'error': str(e)}), 500
@@ -262,6 +269,12 @@ def get_sessions_by_proxy(proxy_id):
             return jsonify({'error': '비활성 프록시입니다.'}), 400
         if not proxy.username or not proxy.password:
             return jsonify({'error': 'SSH 자격 증명이 없습니다.'}), 400
+
+        # 옵션: 조회 시 저장
+        persist = request.args.get('persist', default='0') == '1'
+        saved = 0
+        if persist:
+            saved = monitoring_service.collect_sessions_by_proxy(proxy_id, replace=True)
 
         monitor = ProxyMonitor(
             host=proxy.host,
@@ -281,7 +294,8 @@ def get_sessions_by_proxy(proxy_id):
             'unique_clients': info.get('unique_clients', 0),
             'total_sessions': info.get('total_sessions', 0),
             'headers': info.get('headers') or [],
-            'sessions': info.get('sessions', [])
+            'sessions': info.get('sessions', []),
+            'saved': saved
         })
     except Exception as e:
         logger.error(f"특정 프록시 세션 조회 실패: {e}")
@@ -300,9 +314,10 @@ def collect_sessions_by_group(group_id):
 
 @monitoring_bp.route('/sessions/search', methods=['GET'])
 def search_sessions():
-    """임시저장된 세션 검색. 파라미터: group_id, q(키워드), protocol, status, client_ip, server_ip, user, url, page, page_size"""
+    """임시저장된 세션 검색. 파라미터: group_id, proxy_id, q(키워드), protocol, status, client_ip, server_ip, user, url, page, page_size"""
     try:
         group_id = request.args.get('group_id', type=int)
+        proxy_id = request.args.get('proxy_id', type=int)
         keyword = request.args.get('q', type=str)
         protocol = request.args.get('protocol', type=str)
         status = request.args.get('status', type=str)
@@ -315,6 +330,7 @@ def search_sessions():
 
         items, total = monitoring_service.search_sessions_paginated(
             group_id=group_id,
+            proxy_id=proxy_id,
             keyword=keyword,
             protocol=protocol,
             status=status,

@@ -125,12 +125,30 @@ class SessionRecord(db.Model):
     group_id = db.Column(db.Integer, db.ForeignKey('proxy_groups.id'), nullable=True)
     proxy_id = db.Column(db.Integer, db.ForeignKey('proxy_servers.id'), nullable=True)
 
-    client_ip = db.Column(db.String(128))
-    server_ip = db.Column(db.String(128))
-    protocol = db.Column(db.String(32))
-    user = db.Column(db.String(128))
-    policy = db.Column(db.String(256))
-    category = db.Column(db.String(256))
+    # 표준화된 주요 필드 (검색 대상)
+    client_ip = db.Column(db.String(128), index=True)
+    server_ip = db.Column(db.String(128), index=True)
+    protocol = db.Column(db.String(32), index=True)
+    user = db.Column(db.String(128), index=True)
+    policy = db.Column(db.Text)  # URL 맵핑
+    category = db.Column(db.String(256))  # Status 맵핑
+
+    # 파싱된 전체 컬럼 (가능한 한 모두 보존)
+    transaction = db.Column(db.String(64))
+    creation_time = db.Column(db.DateTime)
+    cust_id = db.Column(db.String(128))
+    user_name = db.Column(db.String(128))
+    client_side_mwg_ip = db.Column(db.String(128))
+    server_side_mwg_ip = db.Column(db.String(128))
+    cl_bytes_received = db.Column(db.BigInteger)
+    cl_bytes_sent = db.Column(db.BigInteger)
+    srv_bytes_received = db.Column(db.BigInteger)
+    srv_bytes_sent = db.Column(db.BigInteger)
+    trxn_index = db.Column(db.Integer)
+    age_seconds = db.Column(db.Integer)
+    in_use = db.Column(db.String(32))  # MWG는 Y/N 등 문자열일 수 있음
+    url = db.Column(db.Text)
+
     extra = db.Column(db.JSON)  # 원본 컬럼 전체를 JSON으로 보관
 
     created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
@@ -146,6 +164,20 @@ class SessionRecord(db.Model):
             'user': self.user,
             'policy': self.policy,
             'category': self.category,
+            'transaction': self.transaction,
+            'creation_time': self.creation_time.isoformat() if self.creation_time else None,
+            'cust_id': self.cust_id,
+            'user_name': self.user_name,
+            'client_side_mwg_ip': self.client_side_mwg_ip,
+            'server_side_mwg_ip': self.server_side_mwg_ip,
+            'cl_bytes_received': self.cl_bytes_received,
+            'cl_bytes_sent': self.cl_bytes_sent,
+            'srv_bytes_received': self.srv_bytes_received,
+            'srv_bytes_sent': self.srv_bytes_sent,
+            'trxn_index': self.trxn_index,
+            'age_seconds': self.age_seconds,
+            'in_use': self.in_use,
+            'url': self.url,
             'extra': self.extra,
             'created_at': self.created_at.isoformat() if self.created_at else None
         }

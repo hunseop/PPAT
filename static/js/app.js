@@ -22,7 +22,7 @@ let sessionsGroupId = null;
 let sessionHeaders = [];
 let sessionFilters = { protocol: '', status: '', client_ip: '', server_ip: '', user: '', url: '', q: '' };
 let sessionPage = 1;
-let sessionPageSize = 50;
+let sessionPageSize = 100;
 let sessionTotal = 0;
 
 // DOM 로드 완료 후 초기화
@@ -989,15 +989,17 @@ function populateSessionProxySelect() {
 
 async function loadSessions() {
     const select = document.getElementById('sessionProxySelect');
+    const gsel = document.getElementById('sessionGroupSelect');
     const proxyId = select && select.value ? parseInt(select.value) : null;
+    sessionsGroupId = gsel && gsel.value ? parseInt(gsel.value) : sessionsGroupId;
     try {
         // 그룹 또는 프록시를 선택한 경우에만 조회
         if (!proxyId && !sessionsGroupId) {
             return showNotification('그룹 또는 프록시를 선택하세요.', 'warning');
         }
         const params = new URLSearchParams();
-        if (!proxyId && sessionsGroupId) params.set('group_id', sessionsGroupId);
-        const url = proxyId ? `/api/monitoring/sessions/${proxyId}` : `/api/monitoring/sessions?${params.toString()}`;
+        if (!proxyId && sessionsGroupId) { params.set('group_id', sessionsGroupId); params.set('persist','1'); }
+        const url = proxyId ? `/api/monitoring/sessions/${proxyId}?persist=1` : `/api/monitoring/sessions?${params.toString()}`;
         const res = await fetch(url);
         if (!res.ok) {
             const txt = await res.text();
@@ -1151,6 +1153,13 @@ function changeSessionPage(p) {
     const totalPages = Math.max(1, Math.ceil(sessionTotal / sessionPageSize));
     if (p > totalPages) return;
     sessionPage = p;
+    loadSessionSearchPage();
+}
+
+function changeSessionPageSize(v) {
+    const n = parseInt(v || '100');
+    sessionPageSize = isNaN(n) ? 100 : n;
+    sessionPage = 1;
     loadSessionSearchPage();
 }
 
