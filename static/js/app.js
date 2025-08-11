@@ -1045,7 +1045,7 @@ function renderSessionsTable(items) {
     items.forEach(item => {
         const proxyName = item.proxy_name || item.host || '';
         (item.sessions || []).forEach(s => {
-            const tds = [`<td class="ps-3 sticky-col">${proxyName}</td>`];
+            const tds = [`<td class=\"ps-3 sticky-col\">${proxyName}</td>`];
             const client_ip = s['Client IP'] || s['ClientIP'] || '';
             const server_ip = s['Server IP'] || s['ServerIP'] || '';
             const protocol = s['Protocol'] || '';
@@ -1053,13 +1053,33 @@ function renderSessionsTable(items) {
             const url = s['URL'] || '';
             const status = s['Status'] || s['Age(seconds) Status'] || '';
             const ctime = s['Creation Time'] || '';
+            const cust = s['Cust ID'] || '';
+            const c_mwg = s['Client Side MWG IP'] || '';
+            const s_mwg = s['Server Side MWG IP'] || '';
+            const cl_br = s['CL Bytes Received'] || '';
+            const cl_bs = s['CL Bytes Sent'] || '';
+            const srv_br = s['SRV Bytes Received'] || '';
+            const srv_bs = s['SRV Bytes Sent'] || '';
+            const trxn = s['Trxn Index'] || '';
+            const age = s['Age(seconds)'] || '';
+            const inuse = s['In use'] || '';
             tds.push(`<td>${escapeHtml(client_ip || '-')}</td>`);
             tds.push(`<td>${escapeHtml(server_ip || '-')}</td>`);
             tds.push(`<td>${escapeHtml(protocol || '-')}</td>`);
             tds.push(`<td>${escapeHtml(user || '-')}</td>`);
-            tds.push(`<td class="truncate">${escapeHtml(url || '-')}</td>`);
+            tds.push(`<td class=\"truncate\">${escapeHtml(url || '-')}</td>`);
             tds.push(`<td>${escapeHtml(status || '-')}</td>`);
             tds.push(`<td>${escapeHtml(ctime || '-')}</td>`);
+            tds.push(`<td>${escapeHtml(cust || '-')}</td>`);
+            tds.push(`<td>${escapeHtml(c_mwg || '-')}</td>`);
+            tds.push(`<td>${escapeHtml(s_mwg || '-')}</td>`);
+            tds.push(`<td>${escapeHtml(String(cl_br || '-'))}</td>`);
+            tds.push(`<td>${escapeHtml(String(cl_bs || '-'))}</td>`);
+            tds.push(`<td>${escapeHtml(String(srv_br || '-'))}</td>`);
+            tds.push(`<td>${escapeHtml(String(srv_bs || '-'))}</td>`);
+            tds.push(`<td>${escapeHtml(String(trxn || '-'))}</td>`);
+            tds.push(`<td>${escapeHtml(String(age || '-'))}</td>`);
+            tds.push(`<td>${escapeHtml(inuse || '-')}</td>`);
             rows.push(`<tr>${tds.join('')}</tr>`);
         });
     });
@@ -1167,6 +1187,9 @@ function changeSessionPageSize(v) {
 function downloadSessionsCsv() {
     const params = new URLSearchParams();
     if (sessionsGroupId) params.set('group_id', sessionsGroupId);
+    const px = document.getElementById('sessionProxySelect');
+    const proxyId = px && px.value ? parseInt(px.value) : null;
+    if (proxyId) params.set('proxy_id', proxyId);
     if (sessionFilters.q) params.set('q', sessionFilters.q);
     if (sessionFilters.protocol) params.set('protocol', sessionFilters.protocol);
     if (sessionFilters.status) params.set('status', sessionFilters.status);

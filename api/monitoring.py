@@ -354,6 +354,7 @@ def export_sessions_csv():
         from io import StringIO
         from flask import Response
         group_id = request.args.get('group_id', type=int)
+        proxy_id = request.args.get('proxy_id', type=int)
         keyword = request.args.get('q', type=str)
         protocol = request.args.get('protocol', type=str)
         status = request.args.get('status', type=str)
@@ -364,6 +365,7 @@ def export_sessions_csv():
         # 전체 내보내기: 페이지 제한 없이
         items, total = monitoring_service.search_sessions_paginated(
             group_id=group_id,
+            proxy_id=proxy_id,
             keyword=keyword,
             protocol=protocol,
             status=status,
