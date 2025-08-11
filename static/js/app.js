@@ -19,6 +19,11 @@ let nextUpdateTimeout = null;
 let sessions = [];
 let resourcesGroupId = null;
 let sessionsGroupId = null;
+let sessionHeaders = [];
+let sessionFilters = { protocol: '', status: '', client_ip: '', server_ip: '', user: '', url: '', q: '' };
+let sessionPage = 1;
+let sessionPageSize = 50;
+let sessionTotal = 0;
 
 // DOM 로드 완료 후 초기화
 document.addEventListener('DOMContentLoaded', function() {
@@ -103,6 +108,10 @@ function showTab(tabName) {
         document.querySelector('a[onclick="showTab(\'sessions\')"]').classList.add('active');
         populateSessionProxySelect();
         initGroupSelectors();
+        // 초기 로드
+        loadSessions();
+        // 필터 바인딩
+        bindSessionFilters();
     }
     
     currentTab = tabName;
@@ -992,18 +1001,38 @@ async function loadSessions() {
             return showNotification(`세션 조회 실패: ${txt}`, 'danger');
         }
         const data = await res.json();
-        sessions = proxyId ? [data] : (data.data || []);
-        updateSessionsTable(sessions);
+        const list = proxyId ? [data] : (data.data || []);
+        // 동적 헤더 구성: 각 항목의 headers 사용, 없으면 첫 세션의 키 합침
+        const headerSet = new Set();
+        list.forEach(item => {
+            (item.headers || []).forEach(h => headerSet.add(h));
+        });
+        if (headerSet.size === 0) {
+            list.forEach(item => {
+                const s = (item.sessions || [])[0];
+                if (s) Object.keys(s).forEach(k => headerSet.add(k));
+            });
+        }
+        sessionHeaders = Array.from(headerSet);
+        sessions = list;
+        renderSessionsTable(sessions, sessionHeaders);
     } catch (e) {
         console.error('세션 로드 오류:', e);
         showNotification('세션 로드 중 오류가 발생했습니다.', 'danger');
     }
 }
 
-function updateSessionsTable(items) {
+function renderSessionsTable(items, headers) {
+    const thead = document.getElementById('sessionsTableHead');
     const tbody = document.getElementById('sessionsTableBody');
     const emptyMessage = document.getElementById('sessionsEmptyMessage');
-    if (!tbody) return;
+    if (!tbody || !thead) return;
+
+    // 헤더 렌더링
+    const headerCells = ['<th class="border-0 ps-3 sticky-col">Proxy</th>'].concat(
+        headers.map(h => `<th class="border-0">${escapeHtml(h)}</th>`) 
+    );
+    thead.innerHTML = `<tr>${headerCells.join('')}</tr>`;
 
     if (!items || items.length === 0) {
         tbody.innerHTML = '';
@@ -1017,23 +1046,17 @@ function updateSessionsTable(items) {
     items.forEach(item => {
         const proxyName = item.proxy_name || item.host || '';
         (item.sessions || []).forEach(s => {
-            rows.push(`
-                <tr>
-                    <td class="ps-3">${proxyName}</td>
-                    <td>${s['Transaction'] || '-'}</td>
-                    <td>${s['Creation Time'] || '-'}</td>
-                    <td>${s['Protocol'] || '-'}</td>
-                    <td>${s['Cust ID'] || '-'}</td>
-                    <td>${s['User Name'] || s['User'] || '-'}</td>
-                    <td>${s['Client IP'] || '-'}</td>
-                    <td>${s['Server IP'] || '-'}</td>
-                    <td>${s['URL'] || '-'}</td>
-                    <td>${s['Age(seconds) Status'] || s['Status'] || '-'}</td>
-                </tr>
-            `);
+            const tds = [`<td class="ps-3 sticky-col">${proxyName}</td>`];
+            headers.forEach(h => {
+                let val = s[h];
+                if (h === 'User Name' && !val) val = s['User'];
+                if (h === 'Age(seconds)' && !val) val = s['Status'] || s['Age(seconds) Status'];
+                val = (val === undefined || val === null || val === '') ? '-' : val;
+                tds.push(`<td class="truncate">${escapeHtml(String(val))}</td>`);
+            });
+            rows.push(`<tr>${tds.join('')}</tr>`);
         });
     });
-
     tbody.innerHTML = rows.join('');
 }
 
@@ -1053,22 +1076,9 @@ async function collectSessionsByGroup() {
 
 async function searchSessions() {
     const qInput = document.getElementById('sessionSearchInput');
-    const keyword = qInput ? qInput.value.trim() : '';
-    const params = new URLSearchParams();
-    if (sessionsGroupId) params.set('group_id', sessionsGroupId);
-    if (keyword) params.set('q', keyword);
-    try {
-        const res = await fetch(`/api/monitoring/sessions/search?${params.toString()}`);
-        if (!res.ok) {
-            const txt = await res.text();
-            return showNotification(`검색 실패: ${txt}`, 'danger');
-        }
-        const data = await res.json();
-        // search 결과 포맷에 맞춰 테이블 렌더링
-        updateSessionsSearchTable(data.data || []);
-    } catch (e) {
-        showNotification('세션 검색 중 오류가 발생했습니다.', 'danger');
-    }
+    sessionFilters.q = qInput ? qInput.value.trim() : '';
+    sessionPage = 1;
+    await loadSessionSearchPage();
 }
 
 function updateSessionsSearchTable(items) {
@@ -1084,12 +1094,95 @@ function updateSessionsSearchTable(items) {
     tbody.innerHTML = items.map(r => `
         <tr>
             <td class="ps-3">${r.proxy_id || '-'}</td>
-            <td>${r.client_ip || '-'}</td>
-            <td>${r.server_ip || '-'}</td>
-            <td>${r.protocol || '-'}</td>
-            <td>${r.user || '-'}</td>
-            <td>${r.policy || '-'}</td>
-            <td>${r.category || '-'}</td>
+            <td>${escapeHtml(r.client_ip || '-')}</td>
+            <td>${escapeHtml(r.server_ip || '-')}</td>
+            <td>${escapeHtml(r.protocol || '-')}</td>
+            <td>${escapeHtml(r.user || '-')}</td>
+            <td class="truncate">${escapeHtml(r.policy || '-')}</td>
+            <td>${escapeHtml(r.category || '-')}</td>
         </tr>
     `).join('');
+}
+
+async function loadSessionSearchPage() {
+    const params = new URLSearchParams();
+    if (sessionsGroupId) params.set('group_id', sessionsGroupId);
+    if (sessionFilters.q) params.set('q', sessionFilters.q);
+    if (sessionFilters.protocol) params.set('protocol', sessionFilters.protocol);
+    if (sessionFilters.status) params.set('status', sessionFilters.status);
+    if (sessionFilters.client_ip) params.set('client_ip', sessionFilters.client_ip);
+    if (sessionFilters.server_ip) params.set('server_ip', sessionFilters.server_ip);
+    if (sessionFilters.user) params.set('user', sessionFilters.user);
+    if (sessionFilters.url) params.set('url', sessionFilters.url);
+    params.set('page', sessionPage);
+    params.set('page_size', sessionPageSize);
+    const res = await fetch(`/api/monitoring/sessions/search?${params.toString()}`);
+    if (!res.ok) {
+        const txt = await res.text();
+        return showNotification(`검색 실패: ${txt}`, 'danger');
+    }
+    const data = await res.json();
+    sessionTotal = data.total || 0;
+    updateSessionsSearchTable(data.data || []);
+    renderSessionPagination();
+}
+
+function renderSessionPagination() {
+    const totalPages = Math.max(1, Math.ceil(sessionTotal / sessionPageSize));
+    let html = '';
+    html += `<nav><ul class="pagination pagination-sm justify-content-end m-2">`;
+    const disabledPrev = sessionPage <= 1 ? ' disabled' : '';
+    const disabledNext = sessionPage >= totalPages ? ' disabled' : '';
+    html += `<li class="page-item${disabledPrev}"><a class="page-link" href="#" onclick="changeSessionPage(${sessionPage-1});return false;">이전</a></li>`;
+    html += `<li class="page-item disabled"><span class="page-link">${sessionPage} / ${totalPages}</span></li>`;
+    html += `<li class="page-item${disabledNext}"><a class="page-link" href="#" onclick="changeSessionPage(${sessionPage+1});return false;">다음</a></li>`;
+    html += `</ul></nav>`;
+    const container = document.getElementById('sessionsPagination');
+    if (container) container.innerHTML = html;
+}
+
+function changeSessionPage(p) {
+    if (p < 1) return;
+    const totalPages = Math.max(1, Math.ceil(sessionTotal / sessionPageSize));
+    if (p > totalPages) return;
+    sessionPage = p;
+    loadSessionSearchPage();
+}
+
+function downloadSessionsCsv() {
+    const params = new URLSearchParams();
+    if (sessionsGroupId) params.set('group_id', sessionsGroupId);
+    if (sessionFilters.q) params.set('q', sessionFilters.q);
+    if (sessionFilters.protocol) params.set('protocol', sessionFilters.protocol);
+    if (sessionFilters.status) params.set('status', sessionFilters.status);
+    if (sessionFilters.client_ip) params.set('client_ip', sessionFilters.client_ip);
+    if (sessionFilters.server_ip) params.set('server_ip', sessionFilters.server_ip);
+    if (sessionFilters.user) params.set('user', sessionFilters.user);
+    if (sessionFilters.url) params.set('url', sessionFilters.url);
+    window.location.href = `/api/monitoring/sessions/export?${params.toString()}`;
+}
+
+function escapeHtml(s) {
+    return s.replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+}
+
+function bindSessionFilters() {
+    const p = document.getElementById('filterProtocol');
+    const s = document.getElementById('filterStatus');
+    const cip = document.getElementById('filterClientIP');
+    const sip = document.getElementById('filterServerIP');
+    const u = document.getElementById('filterUser');
+    const url = document.getElementById('filterUrl');
+    const debounce = (fn, ms) => { let t; return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); }; };
+    const onChange = debounce(() => {
+        sessionFilters.protocol = p ? p.value.trim() : '';
+        sessionFilters.status = s ? s.value.trim() : '';
+        sessionFilters.client_ip = cip ? cip.value.trim() : '';
+        sessionFilters.server_ip = sip ? sip.value.trim() : '';
+        sessionFilters.user = u ? u.value.trim() : '';
+        sessionFilters.url = url ? url.value.trim() : '';
+        sessionPage = 1;
+        loadSessionSearchPage();
+    }, 300);
+    ;[p,s,cip,sip,u,url].forEach(el => el && el.addEventListener('input', onChange));
 }

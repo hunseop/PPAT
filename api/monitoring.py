@@ -239,6 +239,7 @@ def get_sessions():
                     'is_main': proxy.is_main,
                     'unique_clients': info.get('unique_clients', 0),
                     'total_sessions': info.get('total_sessions', 0),
+                    'headers': info.get('headers') or [],
                     'sessions': info.get('sessions', [])
                 })
             except Exception as e:
@@ -275,6 +276,7 @@ def get_sessions_by_proxy(proxy_id):
             'is_main': proxy.is_main,
             'unique_clients': info.get('unique_clients', 0),
             'total_sessions': info.get('total_sessions', 0),
+            'headers': info.get('headers') or [],
             'sessions': info.get('sessions', [])
         })
     except Exception as e:
@@ -294,12 +296,75 @@ def collect_sessions_by_group(group_id):
 
 @monitoring_bp.route('/sessions/search', methods=['GET'])
 def search_sessions():
-    """임시저장된 세션 검색. 파라미터: group_id, q(키워드)"""
+    """임시저장된 세션 검색. 파라미터: group_id, q(키워드), protocol, status, client_ip, server_ip, user, url, page, page_size"""
     try:
         group_id = request.args.get('group_id', type=int)
         keyword = request.args.get('q', type=str)
-        records = monitoring_service.search_sessions(group_id, keyword, limit=1000)
-        return jsonify({'success': True, 'data': records})
+        protocol = request.args.get('protocol', type=str)
+        status = request.args.get('status', type=str)
+        client_ip = request.args.get('client_ip', type=str)
+        server_ip = request.args.get('server_ip', type=str)
+        user = request.args.get('user', type=str)
+        url_contains = request.args.get('url', type=str)
+        page = request.args.get('page', default=1, type=int)
+        page_size = request.args.get('page_size', default=100, type=int)
+
+        items, total = monitoring_service.search_sessions_paginated(
+            group_id=group_id,
+            keyword=keyword,
+            protocol=protocol,
+            status=status,
+            client_ip=client_ip,
+            server_ip=server_ip,
+            user=user,
+            url_contains=url_contains,
+            page=page,
+            page_size=page_size
+        )
+        return jsonify({'success': True, 'data': items, 'total': total, 'page': page, 'page_size': page_size})
     except Exception as e:
         logger.error(f"세션 검색 실패: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@monitoring_bp.route('/sessions/export', methods=['GET'])
+def export_sessions_csv():
+    """필터를 적용한 임시저장 세션 CSV 다운로드"""
+    try:
+        import csv
+        from io import StringIO
+        from flask import Response
+        group_id = request.args.get('group_id', type=int)
+        keyword = request.args.get('q', type=str)
+        protocol = request.args.get('protocol', type=str)
+        status = request.args.get('status', type=str)
+        client_ip = request.args.get('client_ip', type=str)
+        server_ip = request.args.get('server_ip', type=str)
+        user = request.args.get('user', type=str)
+        url_contains = request.args.get('url', type=str)
+        # 전체 내보내기: 페이지 제한 없이
+        items, total = monitoring_service.search_sessions_paginated(
+            group_id=group_id,
+            keyword=keyword,
+            protocol=protocol,
+            status=status,
+            client_ip=client_ip,
+            server_ip=server_ip,
+            user=user,
+            url_contains=url_contains,
+            page=1,
+            page_size=1000000
+        )
+        # 컬럼 헤더
+        fieldnames = ['proxy_id','client_ip','server_ip','protocol','user','policy','category','created_at']
+        # CSV 생성
+        buffer = StringIO()
+        writer = csv.DictWriter(buffer, fieldnames=fieldnames)
+        writer.writeheader()
+        for r in items:
+            writer.writerow({k: r.get(k, '') for k in fieldnames})
+        csv_content = buffer.getvalue()
+        buffer.close()
+        return Response(csv_content, mimetype='text/csv', headers={'Content-Disposition': 'attachment; filename=sessions.csv'})
+    except Exception as e:
+        logger.error(f"CSV 내보내기 실패: {e}")
         return jsonify({'error': str(e)}), 500

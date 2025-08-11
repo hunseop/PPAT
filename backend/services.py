@@ -174,6 +174,62 @@ class MonitoringService:
             )
         return [r.to_dict() for r in query.order_by(SessionRecord.created_at.desc()).limit(limit).all()]
 
+    def search_sessions_paginated(self,
+                                 group_id: int | None,
+                                 keyword: str | None,
+                                 protocol: str | None,
+                                 status: str | None,
+                                 client_ip: str | None,
+                                 server_ip: str | None,
+                                 user: str | None,
+                                 url_contains: str | None,
+                                 page: int = 1,
+                                 page_size: int = 100) -> tuple[list[dict], int]:
+        """필터 및 페이지네이션 지원 세션 검색 (임시저장 DB 기준)
+        Returns: (items, total)
+        """
+        from models import SessionRecord, db  # local import
+        query = SessionRecord.query
+        if group_id:
+            query = query.filter(SessionRecord.group_id == group_id)
+        if keyword:
+            like = f"%{keyword}%"
+            query = query.filter(
+                db.or_(
+                    SessionRecord.client_ip.ilike(like),
+                    SessionRecord.server_ip.ilike(like),
+                    SessionRecord.user.ilike(like),
+                    SessionRecord.policy.ilike(like),
+                    SessionRecord.protocol.ilike(like),
+                    SessionRecord.category.ilike(like)
+                )
+            )
+        if protocol:
+            query = query.filter(SessionRecord.protocol.ilike(protocol))
+        if status:
+            query = query.filter(SessionRecord.category.ilike(f"%{status}%"))
+        if client_ip:
+            query = query.filter(SessionRecord.client_ip.ilike(f"%{client_ip}%"))
+        if server_ip:
+            query = query.filter(SessionRecord.server_ip.ilike(f"%{server_ip}%"))
+        if user:
+            query = query.filter(SessionRecord.user.ilike(f"%{user}%"))
+        if url_contains:
+            query = query.filter(SessionRecord.policy.ilike(f"%{url_contains}%"))
+
+        total = query.count()
+        if page < 1:
+            page = 1
+        if page_size < 1:
+            page_size = 100
+        items = (
+            query.order_by(SessionRecord.created_at.desc())
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+            .all()
+        )
+        return [r.to_dict() for r in items], total
+
 
 # 전역 인스턴스
 device_manager = DeviceManager()

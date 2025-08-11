@@ -279,6 +279,7 @@ class ProxyMonitor:
             return {
                 'unique_clients': len(client_ips),
                 'total_sessions': len(sessions),
+                'headers': header,
                 'sessions': sessions
             }
             
