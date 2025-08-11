@@ -2,9 +2,9 @@
 
 from flask import Blueprint, jsonify, request
 from models import ProxyServer, MonitoringConfig, db, SessionRecord, ProxyGroup
-from monitoring_module import ProxyMonitor
+from unified import ProxyMonitor
 import logging
-from core import monitoring_service
+from unified import monitoring_service
 
 logger = logging.getLogger(__name__)
 

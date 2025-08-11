@@ -26,7 +26,7 @@ def test_proxy_module(host, username=None, password=None, port=22):
         return
     
     try:
-        from proxy_module.proxy_client import ProxyClient
+        from unified import ProxyClient
         
         print("✅ ProxyClient 생성 중...")
         client = ProxyClient(host=host, port=port, username=username, password=password)
@@ -72,7 +72,7 @@ def test_monitoring_module(host, username=None, password=None, snmp_port=161, sn
         sys.path.append(os.path.dirname(os.path.abspath(__file__)))
         
         from app import create_app
-        from monitoring_module import ProxyMonitor
+        from unified import ProxyMonitor
         
         app = create_app()
         with app.app_context():
@@ -136,7 +136,7 @@ def compare_modules(host, username=None, password=None, port=22, snmp_port=161, 
     # proxy_module 테스트
     proxy_results = {}
     try:
-        from proxy_module.proxy_client import ProxyClient
+        from unified import ProxyClient
         client = ProxyClient(host=host, port=port, username=username, password=password)
         
         if client.test_connection():
@@ -157,7 +157,7 @@ def compare_modules(host, username=None, password=None, port=22, snmp_port=161, 
         sys.path.append(os.path.dirname(os.path.abspath(__file__)))
         
         from app import create_app
-        from monitoring_module import ProxyMonitor
+        from unified import ProxyMonitor
         
         app = create_app()
         with app.app_context():
@@ -224,7 +224,7 @@ def test_database_config():
             active_config = MonitoringConfig.query.filter_by(is_active=True).first()
             if active_config:
                 print(f"\n🔧 활성 설정으로 ProxyMonitor 테스트...")
-                from monitoring_module import ProxyMonitor
+                from unified import ProxyMonitor
                 
                 # 더미 호스트로 설정 테스트
                 monitor = ProxyMonitor('127.0.0.1')

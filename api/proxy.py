@@ -2,8 +2,8 @@
 
 from flask import Blueprint, request, jsonify
 from models import db, ProxyGroup, ProxyServer
-from proxy_module.proxy_manager import proxy_manager
-from core import device_manager
+from unified import proxy_manager
+from unified import device_manager
 
 proxy_bp = Blueprint('proxy', __name__)
 
