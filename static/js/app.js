@@ -1007,9 +1007,13 @@ async function loadSessions() {
             const txt = await res.text();
             return showNotification(`세션 조회 실패: ${txt}`, 'danger');
         }
-        // 저장 후 DB 페이지네이션으로 첫 페이지(기본 100행) 로드
+        // 저장 후 DataTables 서버사이드로 표시
         sessionPage = 1;
-        await loadSessionSearchPage();
+        if (typeof initSessionsDataTable === 'function') {
+            initSessionsDataTable();
+        } else {
+            await loadSessionSearchPage();
+        }
     } catch (e) {
         console.error('세션 로드 오류:', e);
         showNotification('세션 로드 중 오류가 발생했습니다.', 'danger');

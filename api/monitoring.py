@@ -390,3 +390,96 @@ def export_sessions_csv():
     except Exception as e:
         logger.error(f"CSV 내보내기 실패: {e}")
         return jsonify({'error': str(e)}), 500
+
+@monitoring_bp.route('/sessions/datatables', methods=['GET'])
+def sessions_datatables():
+    """DataTables server-side endpoint for session records
+    Visible columns: proxy (name or host), client_ip, server_ip, protocol, user, policy, category
+    Supports: group_id, proxy_id, global search, order, start, length
+    """
+    try:
+        from sqlalchemy import or_, asc, desc
+        draw = request.args.get('draw', default=1, type=int)
+        start = request.args.get('start', default=0, type=int)
+        length = request.args.get('length', default=100, type=int)
+        search_value = request.args.get('search[value]', default='', type=str)
+        order_col = request.args.get('order[0][column]', type=int)
+        order_dir = request.args.get('order[0][dir]', default='asc', type=str)
+        group_id = request.args.get('group_id', type=int)
+        proxy_id = request.args.get('proxy_id', type=int)
+
+        # Base query
+        from models import SessionRecord
+        query = SessionRecord.query
+        if group_id:
+            query = query.filter(SessionRecord.group_id == group_id)
+        if proxy_id:
+            query = query.filter(SessionRecord.proxy_id == proxy_id)
+
+        records_total = query.count()
+
+        # Search
+        if search_value:
+            like = f"%{search_value}%"
+            query = query.filter(
+                or_(
+                    SessionRecord.client_ip.ilike(like),
+                    SessionRecord.server_ip.ilike(like),
+                    SessionRecord.user.ilike(like),
+                    SessionRecord.policy.ilike(like),
+                    SessionRecord.protocol.ilike(like),
+                    SessionRecord.category.ilike(like)
+                )
+            )
+        records_filtered = query.count()
+
+        # Ordering
+        # DataTables column order: 0=proxy,1=client_ip,2=server_ip,3=protocol,4=user,5=policy,6=category
+        if order_col is not None:
+            if order_col == 1:
+                order_field = SessionRecord.client_ip
+            elif order_col == 2:
+                order_field = SessionRecord.server_ip
+            elif order_col == 3:
+                order_field = SessionRecord.protocol
+            elif order_col == 4:
+                order_field = SessionRecord.user
+            elif order_col == 5:
+                order_field = SessionRecord.policy
+            elif order_col == 6:
+                order_field = SessionRecord.category
+            else:
+                # proxy column: we cannot easily order without join; fallback to created_at desc
+                order_field = SessionRecord.created_at
+            query = query.order_by(asc(order_field) if order_dir == 'asc' else desc(order_field))
+        else:
+            query = query.order_by(desc(SessionRecord.created_at))
+
+        # Page slice
+        rows = query.offset(start).limit(length).all()
+
+        # Proxy id->name map
+        proxies = {p.id: p for p in ProxyServer.query.all()}
+
+        data_rows = []
+        for r in rows:
+            proxy_label = proxies.get(r.proxy_id).name if proxies.get(r.proxy_id) else (str(r.proxy_id) if r.proxy_id else '-')
+            data_rows.append([
+                proxy_label,
+                r.client_ip or '',
+                r.server_ip or '',
+                r.protocol or '',
+                r.user or '',
+                r.policy or '',
+                r.category or ''
+            ])
+
+        return jsonify({
+            'draw': draw,
+            'recordsTotal': records_total,
+            'recordsFiltered': records_filtered,
+            'data': data_rows
+        })
+    except Exception as e:
+        logger.error(f"DataTables 세션 조회 실패: {e}")
+        return jsonify({'error': str(e)}), 500
