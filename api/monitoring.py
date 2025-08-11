@@ -362,6 +362,7 @@ def export_sessions_csv():
         server_ip = request.args.get('server_ip', type=str)
         user = request.args.get('user', type=str)
         url_contains = request.args.get('url', type=str)
+        export_all = request.args.get('all', default='1') == '1'
         # 전체 내보내기: 페이지 제한 없이
         items, total = monitoring_service.search_sessions_paginated(
             group_id=group_id,
@@ -377,7 +378,15 @@ def export_sessions_csv():
             page_size=1000000
         )
         # 컬럼 헤더
-        fieldnames = ['proxy_id','client_ip','server_ip','protocol','user','policy','category','created_at']
+        if export_all:
+            fieldnames = [
+                'proxy_id','transaction','creation_time','protocol','cust_id','user_name',
+                'client_ip','client_side_mwg_ip','server_side_mwg_ip','server_ip',
+                'cl_bytes_received','cl_bytes_sent','srv_bytes_received','srv_bytes_sent',
+                'trxn_index','age_seconds','category','in_use','url','created_at'
+            ]
+        else:
+            fieldnames = ['proxy_id','client_ip','server_ip','protocol','user','policy','category','created_at']
         # CSV 생성
         buffer = StringIO()
         writer = csv.DictWriter(buffer, fieldnames=fieldnames)
@@ -394,7 +403,7 @@ def export_sessions_csv():
 @monitoring_bp.route('/sessions/datatables', methods=['GET'])
 def sessions_datatables():
     """DataTables server-side endpoint for session records
-    Visible columns: proxy (name or host), client_ip, server_ip, protocol, user, policy, category
+    Visible columns: Proxy + 모든 세션 컬럼을 개체 형태로 반환
     Supports: group_id, proxy_id, global search, order, start, length
     """
     try:
@@ -428,29 +437,36 @@ def sessions_datatables():
                     SessionRecord.user.ilike(like),
                     SessionRecord.policy.ilike(like),
                     SessionRecord.protocol.ilike(like),
-                    SessionRecord.category.ilike(like)
+                    SessionRecord.category.ilike(like),
+                    SessionRecord.user_name.ilike(like)
                 )
             )
         records_filtered = query.count()
 
-        # Ordering
-        # DataTables column order: 0=proxy,1=client_ip,2=server_ip,3=protocol,4=user,5=policy,6=category
-        if order_col is not None:
-            if order_col == 1:
-                order_field = SessionRecord.client_ip
-            elif order_col == 2:
-                order_field = SessionRecord.server_ip
-            elif order_col == 3:
-                order_field = SessionRecord.protocol
-            elif order_col == 4:
-                order_field = SessionRecord.user
-            elif order_col == 5:
-                order_field = SessionRecord.policy
-            elif order_col == 6:
-                order_field = SessionRecord.category
-            else:
-                # proxy column: we cannot easily order without join; fallback to created_at desc
-                order_field = SessionRecord.created_at
+        # Ordering: 매핑 테이블 정의 (DataTables 인덱스 -> 모델 필드)
+        order_map = {
+            0: None,  # proxy (조인 없이 정렬 곤란) -> created_at로 대체
+            1: SessionRecord.transaction,
+            2: SessionRecord.creation_time,
+            3: SessionRecord.protocol,
+            4: SessionRecord.cust_id,
+            5: SessionRecord.user_name,
+            6: SessionRecord.client_ip,
+            7: SessionRecord.client_side_mwg_ip,
+            8: SessionRecord.server_side_mwg_ip,
+            9: SessionRecord.server_ip,
+            10: SessionRecord.cl_bytes_received,
+            11: SessionRecord.cl_bytes_sent,
+            12: SessionRecord.srv_bytes_received,
+            13: SessionRecord.srv_bytes_sent,
+            14: SessionRecord.trxn_index,
+            15: SessionRecord.age_seconds,
+            16: SessionRecord.category,
+            17: SessionRecord.in_use,
+            18: SessionRecord.url,
+        }
+        if order_col is not None and order_col in order_map and order_map[order_col] is not None:
+            order_field = order_map[order_col]
             query = query.order_by(asc(order_field) if order_dir == 'asc' else desc(order_field))
         else:
             query = query.order_by(desc(SessionRecord.created_at))
@@ -464,15 +480,27 @@ def sessions_datatables():
         data_rows = []
         for r in rows:
             proxy_label = proxies.get(r.proxy_id).name if proxies.get(r.proxy_id) else (str(r.proxy_id) if r.proxy_id else '-')
-            data_rows.append([
-                proxy_label,
-                r.client_ip or '',
-                r.server_ip or '',
-                r.protocol or '',
-                r.user or '',
-                r.policy or '',
-                r.category or ''
-            ])
+            data_rows.append({
+                'proxy': proxy_label,
+                'transaction': r.transaction or '',
+                'creation_time': (r.creation_time.isoformat(sep=' ') if r.creation_time else ''),
+                'protocol': r.protocol or '',
+                'cust_id': r.cust_id or '',
+                'user_name': r.user_name or (r.user or ''),
+                'client_ip': r.client_ip or '',
+                'client_side_mwg_ip': r.client_side_mwg_ip or '',
+                'server_side_mwg_ip': r.server_side_mwg_ip or '',
+                'server_ip': r.server_ip or '',
+                'cl_bytes_received': r.cl_bytes_received or 0,
+                'cl_bytes_sent': r.cl_bytes_sent or 0,
+                'srv_bytes_received': r.srv_bytes_received or 0,
+                'srv_bytes_sent': r.srv_bytes_sent or 0,
+                'trxn_index': r.trxn_index or 0,
+                'age_seconds': r.age_seconds or 0,
+                'status': r.category or '',
+                'in_use': r.in_use or '',
+                'url': r.url or (r.policy or '')
+            })
 
         return jsonify({
             'draw': draw,

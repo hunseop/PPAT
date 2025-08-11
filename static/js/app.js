@@ -1000,7 +1000,7 @@ async function loadSessions() {
             return showNotification('그룹 또는 프록시를 선택하세요.', 'warning');
         }
         const params = new URLSearchParams();
-        if (!proxyId && sessionsGroupId) { params.set('group_id', sessionsGroupId); params.set('persist','1'); }
+        if (!proxyId && sessionsGroupId) params.set('group_id', sessionsGroupId); params.set('persist','1'); }
         const url = proxyId ? `/api/monitoring/sessions/${proxyId}?persist=1` : `/api/monitoring/sessions?${params.toString()}`;
         const res = await fetch(url);
         if (!res.ok) {
@@ -1020,42 +1020,7 @@ async function loadSessions() {
     }
 }
 
-function renderSessionsTable(items) {
-    const thead = document.getElementById('sessionsTableHead');
-    const tbody = document.getElementById('sessionsTableBody');
-    const emptyMessage = document.getElementById('sessionsEmptyMessage');
-    if (!tbody || !thead) return;
-
-    if (!items || items.length === 0) {
-        tbody.innerHTML = '';
-        if (emptyMessage) emptyMessage.style.display = 'block';
-        return;
-    }
-
-    if (emptyMessage) emptyMessage.style.display = 'none';
-
-    const rows = [];
-    items.forEach(item => {
-        const proxyName = item.proxy_name || item.host || '';
-        (item.sessions || []).forEach(s => {
-            const tds = [`<td class=\"ps-3 sticky-col\">${proxyName}</td>`];
-            const client_ip = s['Client IP'] || s['ClientIP'] || '';
-            const server_ip = s['Server IP'] || s['ServerIP'] || '';
-            const protocol = s['Protocol'] || '';
-            const user = s['User Name'] || s['User'] || '';
-            const url = s['URL'] || '';
-            const status = s['Status'] || s['Age(seconds) Status'] || '';
-            tds.push(`<td>${escapeHtml(client_ip || '-')}</td>`);
-            tds.push(`<td>${escapeHtml(server_ip || '-')}</td>`);
-            tds.push(`<td>${escapeHtml(protocol || '-')}</td>`);
-            tds.push(`<td>${escapeHtml(user || '-')}</td>`);
-            tds.push(`<td class=\"truncate\">${escapeHtml(url || '-')}</td>`);
-            tds.push(`<td>${escapeHtml(status || '-')}</td>`);
-            rows.push(`<tr>${tds.join('')}</tr>`);
-        });
-    });
-    tbody.innerHTML = rows.join('');
-}
+// DataTables가 UI를 관리하므로 렌더러는 사용하지 않습니다.
 
 async function collectSessionsByGroup() {
     const sel = document.getElementById('sessionGroupSelect');
