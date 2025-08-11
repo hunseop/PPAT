@@ -19,6 +19,7 @@ let nextUpdateTimeout = null;
 let sessions = [];
 let resourcesGroupId = null;
 let sessionsGroupId = null;
+let sessionsProxyId = null;
 let sessionHeaders = [];
 let sessionFilters = { protocol: '', status: '', client_ip: '', server_ip: '', user: '', url: '', q: '' };
 let sessionPage = 1;
@@ -992,35 +993,23 @@ async function loadSessions() {
     const gsel = document.getElementById('sessionGroupSelect');
     const proxyId = select && select.value ? parseInt(select.value) : null;
     sessionsGroupId = gsel && gsel.value ? parseInt(gsel.value) : sessionsGroupId;
+    sessionsProxyId = proxyId;
     try {
         // 그룹 또는 프록시를 선택한 경우에만 조회
         if (!proxyId && !sessionsGroupId) {
             return showNotification('그룹 또는 프록시를 선택하세요.', 'warning');
         }
         const params = new URLSearchParams();
-        if (!proxyId && sessionsGroupId) params.set('group_id', sessionsGroupId); params.set('persist','1'); }
+        if (!proxyId && sessionsGroupId) { params.set('group_id', sessionsGroupId); params.set('persist','1'); }
         const url = proxyId ? `/api/monitoring/sessions/${proxyId}?persist=1` : `/api/monitoring/sessions?${params.toString()}`;
         const res = await fetch(url);
         if (!res.ok) {
             const txt = await res.text();
             return showNotification(`세션 조회 실패: ${txt}`, 'danger');
         }
-        const data = await res.json();
-        const list = proxyId ? [data] : (data.data || []);
-        // 동적 헤더 구성: 각 항목의 headers 사용, 없으면 첫 세션의 키 합침
-        const headerSet = new Set();
-        list.forEach(item => {
-            (item.headers || []).forEach(h => headerSet.add(h));
-        });
-        if (headerSet.size === 0) {
-            list.forEach(item => {
-                const s = (item.sessions || [])[0];
-                if (s) Object.keys(s).forEach(k => headerSet.add(k));
-            });
-        }
-        sessionHeaders = Array.from(headerSet);
-        sessions = list;
-        renderSessionsTable(sessions, sessionHeaders);
+        // 저장 후 DB 페이지네이션으로 첫 페이지(기본 100행) 로드
+        sessionPage = 1;
+        await loadSessionSearchPage();
     } catch (e) {
         console.error('세션 로드 오류:', e);
         showNotification('세션 로드 중 오류가 발생했습니다.', 'danger');
@@ -1113,6 +1102,7 @@ function updateSessionsSearchTable(items) {
 async function loadSessionSearchPage() {
     const params = new URLSearchParams();
     if (sessionsGroupId) params.set('group_id', sessionsGroupId);
+    if (sessionsProxyId) params.set('proxy_id', sessionsProxyId);
     if (sessionFilters.q) params.set('q', sessionFilters.q);
     if (sessionFilters.protocol) params.set('protocol', sessionFilters.protocol);
     if (sessionFilters.status) params.set('status', sessionFilters.status);
