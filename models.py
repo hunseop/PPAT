@@ -130,7 +130,7 @@ class SessionRecord(db.Model):
     server_ip = db.Column(db.String(128), index=True)
     protocol = db.Column(db.String(32), index=True)
     user = db.Column(db.String(128), index=True)
-    policy = db.Column(db.Text)  # URL 맵핑
+    policy = db.Column(db.Text)  # URL 맵핑 (legacy)
     category = db.Column(db.String(256))  # Status 맵핑
 
     # 파싱된 전체 컬럼 (가능한 한 모두 보존)
@@ -148,6 +148,7 @@ class SessionRecord(db.Model):
     age_seconds = db.Column(db.Integer)
     in_use = db.Column(db.String(32))  # MWG는 Y/N 등 문자열일 수 있음
     url = db.Column(db.Text)
+    url_host = db.Column(db.String(255), index=True)
 
     created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
 
@@ -176,5 +177,6 @@ class SessionRecord(db.Model):
             'age_seconds': self.age_seconds,
             'in_use': self.in_use,
             'url': self.url,
+            'url_host': self.url_host,
             'created_at': self.created_at.isoformat() if self.created_at else None
         }

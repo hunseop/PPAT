@@ -126,8 +126,11 @@ class MonitoringService:
         if persist:
             SessionRecord.query.filter_by(group_id=group_id).delete()
             db.session.commit()
-        proxies = ProxyServer.query.filter_by(group_id=group_id, is_active=True).all()
+        proxies = ProxyServer.query.filter_by(group_id=group_id).all()
         saved = 0
+        # 현재 테이블 컬럼 조회 (마이그레이션 미적용 상황 대비)
+        insp = db.inspect(db.engine)
+        existing_cols = {c['name'] for c in insp.get_columns('session_records')}
         for proxy in proxies:
             monitor = ProxyMonitor(
                 host=proxy.host,
@@ -137,7 +140,11 @@ class MonitoringService:
                 snmp_port=proxy.snmp_port,
                 snmp_community=proxy.snmp_community
             )
-            info = monitor.get_session_info()
+            try:
+                info = monitor.get_session_info()
+            except Exception:
+                # 개별 프록시 실패는 무시하고 다음으로 진행
+                continue
 
             def pick(session: dict, keys: list[str]) -> str:
                 # 후보 키들 중 첫번째로 값이 존재하는 것을 선택 (대소문자/공백 차이 보정)
@@ -151,6 +158,23 @@ class MonitoringService:
                     nk = ''.join(key.lower().split())
                     if nk in normalized and normalized[nk] not in (None, ''):
                         return str(normalized[nk])
+                return ''
+
+            def pick_fuzzy(session: dict, candidates: list[str]) -> str:
+                """느슨한 키 탐색: 부분 문자열 매칭으로 첫 값 선택"""
+                if not session:
+                    return ''
+                lowered = {k.lower(): v for k, v in session.items() if v not in (None, '')}
+                # 1) 우선 엄격 매칭
+                strict = pick(session, candidates)
+                if strict:
+                    return strict
+                # 2) 부분 문자열 매칭
+                for want in candidates:
+                    tokens = [t for t in want.lower().split() if t]
+                    for key, val in lowered.items():
+                        if all(tok in key.replace('_',' ').replace('-', ' ') for tok in tokens):
+                            return str(val)
                 return ''
 
             def to_int(v: str) -> int | None:
@@ -179,41 +203,57 @@ class MonitoringService:
                     return ''
                 return ip.split(':')[0]
 
-            for s in info.get('sessions', []):
-                client_ip = strip_port(pick(s, ['Client IP', 'ClientIP', 'Client Address', 'Client']))
-                server_ip = strip_port(pick(s, ['Server IP', 'ServerIP', 'Server Address', 'Server']))
-                protocol = pick(s, ['Protocol', 'Proto'])
-                user = pick(s, ['User Name', 'User', 'Username', 'UserName'])
-                url = pick(s, ['URL', 'Uri', 'Request URL'])
-                status = pick(s, ['Status', 'Age(seconds) Status', 'In use'])
+            def extract_host(url: str) -> str:
+                if not url:
+                    return ''
+                try:
+                    from urllib.parse import urlparse
+                    parsed = urlparse(url if '://' in url else f'//{url}', allow_fragments=True)
+                    host = parsed.hostname or ''
+                    return host
+                except Exception:
+                    return ''
 
-                rec = SessionRecord(
-                    group_id=group_id,
-                    proxy_id=proxy.id,
-                    client_ip=client_ip,
-                    server_ip=server_ip,
-                    protocol=protocol,
-                    user=user,
-                    policy=url,
-                    category=status,
-                    transaction=pick(s, ['Transaction']),
-                    creation_time=to_dt(pick(s, ['Creation Time'])),
-                    cust_id=pick(s, ['Cust ID']),
-                    user_name=pick(s, ['User Name', 'User']),
-                    client_side_mwg_ip=pick(s, ['Client Side MWG IP']),
-                    server_side_mwg_ip=pick(s, ['Server Side MWG IP']),
-                    cl_bytes_received=to_bigint(pick(s, ['CL Bytes Received'])),
-                    cl_bytes_sent=to_bigint(pick(s, ['CL Bytes Sent'])),
-                    srv_bytes_received=to_bigint(pick(s, ['SRV Bytes Received'])),
-                    srv_bytes_sent=to_bigint(pick(s, ['SRV Bytes Sent'])),
-                    trxn_index=to_int(pick(s, ['Trxn Index'])),
-                    age_seconds=to_int(pick(s, ['Age(seconds)'])),
-                    in_use=pick(s, ['In use']),
-                    url=pick(s, ['URL']),
-                    extra=None
-                )
-                db.session.add(rec)
-                saved += 1
+            for s in info.get('sessions', []):
+                client_ip = strip_port(pick_fuzzy(s, ['Client IP', 'ClientIP', 'Client Address', 'Client']))
+                server_ip = strip_port(pick_fuzzy(s, ['Server IP', 'ServerIP', 'Server Address', 'Server']))
+                protocol = pick_fuzzy(s, ['Protocol', 'Proto'])
+                user = pick_fuzzy(s, ['User Name', 'User', 'Username', 'UserName'])
+                url_full = pick_fuzzy(s, ['URL', 'Uri', 'Request URL'])
+                status = pick_fuzzy(s, ['Status', 'Age(seconds) Status', 'In use'])
+
+                rec_kwargs = {
+                    'group_id': group_id,
+                    'proxy_id': proxy.id,
+                    'client_ip': client_ip,
+                    'server_ip': server_ip,
+                    'protocol': protocol,
+                    'user': user,
+                    'category': status,
+                    'transaction': pick(s, ['Transaction']),
+                    'creation_time': to_dt(pick(s, ['Creation Time'])),
+                    'cust_id': pick(s, ['Cust ID']),
+                    'user_name': pick(s, ['User Name', 'User']),
+                    'client_side_mwg_ip': pick(s, ['Client Side MWG IP']),
+                    'server_side_mwg_ip': pick(s, ['Server Side MWG IP']),
+                    'cl_bytes_received': to_bigint(pick(s, ['CL Bytes Received'])),
+                    'cl_bytes_sent': to_bigint(pick(s, ['CL Bytes Sent'])),
+                    'srv_bytes_received': to_bigint(pick(s, ['SRV Bytes Received'])),
+                    'srv_bytes_sent': to_bigint(pick(s, ['SRV Bytes Sent'])),
+                    'trxn_index': to_int(pick(s, ['Trxn Index'])),
+                    'age_seconds': to_int(pick(s, ['Age(seconds)'])),
+                    'in_use': pick(s, ['In use']),
+                    'url': url_full,
+                }
+                if 'url_host' in existing_cols:
+                    rec_kwargs['url_host'] = extract_host(url_full)
+                try:
+                    rec = SessionRecord(**rec_kwargs)
+                    db.session.add(rec)
+                    saved += 1
+                except Exception:
+                    db.session.rollback()
+                    continue
             db.session.commit()
         return saved
 
@@ -233,7 +273,10 @@ class MonitoringService:
             snmp_port=proxy.snmp_port,
             snmp_community=proxy.snmp_community
         )
-        info = monitor.get_session_info()
+        try:
+            info = monitor.get_session_info()
+        except Exception:
+            return 0
 
         # 재사용: 그룹 저장 로직과 동일한 매핑
         def pick(session: dict, keys: list[str]) -> str:
@@ -272,42 +315,59 @@ class MonitoringService:
                 return ''
             return ip.split(':')[0]
 
+        def extract_host(url: str) -> str:
+            if not url:
+                return ''
+            try:
+                from urllib.parse import urlparse
+                parsed = urlparse(url if '://' in url else f'//{url}', allow_fragments=True)
+                host = parsed.hostname or ''
+                return host
+            except Exception:
+                return ''
+
         saved = 0
-        from models import SessionRecord
+        insp = db.inspect(db.engine)
+        existing_cols = {c['name'] for c in insp.get_columns('session_records')}
         for s in info.get('sessions', []):
             client_ip = strip_port(pick(s, ['Client IP', 'ClientIP', 'Client Address', 'Client']))
             server_ip = strip_port(pick(s, ['Server IP', 'ServerIP', 'Server Address', 'Server']))
             protocol = pick(s, ['Protocol', 'Proto'])
             user = pick(s, ['User Name', 'User', 'Username', 'UserName'])
-            url = pick(s, ['URL', 'Uri', 'Request URL'])
+            url_full = pick(s, ['URL', 'Uri', 'Request URL'])
             status = pick(s, ['Status', 'Age(seconds) Status', 'In use'])
-            rec = SessionRecord(
-                group_id=proxy.group_id,
-                proxy_id=proxy.id,
-                client_ip=client_ip,
-                server_ip=server_ip,
-                protocol=protocol,
-                user=user,
-                policy=url,
-                category=status,
-                transaction=pick(s, ['Transaction']),
-                creation_time=to_dt(pick(s, ['Creation Time'])),
-                cust_id=pick(s, ['Cust ID']),
-                user_name=pick(s, ['User Name', 'User']),
-                client_side_mwg_ip=pick(s, ['Client Side MWG IP']),
-                server_side_mwg_ip=pick(s, ['Server Side MWG IP']),
-                cl_bytes_received=to_bigint(pick(s, ['CL Bytes Received'])),
-                cl_bytes_sent=to_bigint(pick(s, ['CL Bytes Sent'])),
-                srv_bytes_received=to_bigint(pick(s, ['SRV Bytes Received'])),
-                srv_bytes_sent=to_bigint(pick(s, ['SRV Bytes Sent'])),
-                trxn_index=to_int(pick(s, ['Trxn Index'])),
-                age_seconds=to_int(pick(s, ['Age(seconds)'])),
-                in_use=pick(s, ['In use']),
-                url=pick(s, ['URL']),
-                extra=None
-            )
-            db.session.add(rec)
-            saved += 1
+            rec_kwargs = {
+                'group_id': proxy.group_id,
+                'proxy_id': proxy.id,
+                'client_ip': client_ip,
+                'server_ip': server_ip,
+                'protocol': protocol,
+                'user': user,
+                'category': status,
+                'transaction': pick(s, ['Transaction']),
+                'creation_time': to_dt(pick(s, ['Creation Time'])),
+                'cust_id': pick(s, ['Cust ID']),
+                'user_name': pick(s, ['User Name', 'User']),
+                'client_side_mwg_ip': pick(s, ['Client Side MWG IP']),
+                'server_side_mwg_ip': pick(s, ['Server Side MWG IP']),
+                'cl_bytes_received': to_bigint(pick(s, ['CL Bytes Received'])),
+                'cl_bytes_sent': to_bigint(pick(s, ['CL Bytes Sent'])),
+                'srv_bytes_received': to_bigint(pick(s, ['SRV Bytes Received'])),
+                'srv_bytes_sent': to_bigint(pick(s, ['SRV Bytes Sent'])),
+                'trxn_index': to_int(pick(s, ['Trxn Index'])),
+                'age_seconds': to_int(pick(s, ['Age(seconds)'])),
+                'in_use': pick(s, ['In use']),
+                'url': url_full,
+            }
+            if 'url_host' in existing_cols:
+                rec_kwargs['url_host'] = extract_host(url_full)
+            try:
+                rec = SessionRecord(**rec_kwargs)
+                db.session.add(rec)
+                saved += 1
+            except Exception:
+                db.session.rollback()
+                continue
         db.session.commit()
         return saved
 
@@ -323,7 +383,8 @@ class MonitoringService:
                     SessionRecord.client_ip.ilike(like),
                     SessionRecord.server_ip.ilike(like),
                     SessionRecord.user.ilike(like),
-                    SessionRecord.policy.ilike(like),
+                    SessionRecord.url.ilike(like),
+                    SessionRecord.url_host.ilike(like),
                     SessionRecord.protocol.ilike(like),
                     SessionRecord.category.ilike(like)
                 )
@@ -358,7 +419,8 @@ class MonitoringService:
                     SessionRecord.client_ip.ilike(like),
                     SessionRecord.server_ip.ilike(like),
                     SessionRecord.user.ilike(like),
-                    SessionRecord.policy.ilike(like),
+                    SessionRecord.url.ilike(like),
+                    SessionRecord.url_host.ilike(like),
                     SessionRecord.protocol.ilike(like),
                     SessionRecord.category.ilike(like)
                 )
@@ -374,7 +436,7 @@ class MonitoringService:
         if user:
             query = query.filter(SessionRecord.user.ilike(f"%{user}%"))
         if url_contains:
-            query = query.filter(SessionRecord.policy.ilike(f"%{url_contains}%"))
+            query = query.filter(SessionRecord.url.ilike(f"%{url_contains}%"))
 
         total = query.count()
         if page < 1:

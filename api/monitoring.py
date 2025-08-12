@@ -326,8 +326,9 @@ def get_sessions_datatables():
         order_column = request.args.get('order[0][column]', type=int)
         order_dir = request.args.get('order[0][dir]', type=str)
         
-        # 컬럼 매핑
-        columns = ['proxy_id', 'client_ip', 'server_ip', 'protocol', 'user', 'policy', 
+        # 컬럼 매핑 (0: id [hidden], 1: proxy_id, 2: client_ip, 3: server_ip, 4: user, 5: url_host, 6: category,
+        #           7: cl_bytes_sent, 8: cl_bytes_received, 9: age_seconds, 10: created_at)
+        columns = ['id', 'proxy_id', 'client_ip', 'server_ip', 'user', 'url_host', 
                   'category', 'cl_bytes_sent', 'cl_bytes_received', 'age_seconds', 'created_at']
         
         # 필터 파라미터
@@ -346,7 +347,7 @@ def get_sessions_datatables():
         # 검색어 적용
         if search_value:
             search_filter = []
-            for column in ['client_ip', 'server_ip', 'protocol', 'user', 'policy', 'category']:
+            for column in ['client_ip', 'server_ip', 'user', 'url', 'url_host', 'category']:
                 search_filter.append(getattr(SessionRecord, column).ilike(f'%{search_value}%'))
             query = query.filter(db.or_(*search_filter))
             
@@ -361,6 +362,8 @@ def get_sessions_datatables():
                 query = query.order_by(db.desc(getattr(SessionRecord, column)))
             else:
                 query = query.order_by(getattr(SessionRecord, column))
+        else:
+            query = query.order_by(db.desc(SessionRecord.created_at))
         
         # 페이징
         query = query.offset(start).limit(length)
@@ -369,12 +372,12 @@ def get_sessions_datatables():
         data = []
         for record in query.all():
             data.append([
+                record.id,
                 record.proxy_id,
                 record.client_ip,
                 record.server_ip,
-                record.protocol,
                 record.user,
-                record.policy,
+                record.url_host,
                 record.category,
                 record.cl_bytes_sent,
                 record.cl_bytes_received,
@@ -398,6 +401,16 @@ def get_sessions_datatables():
             'data': [],
             'error': str(e)
         }), 500
+
+@monitoring_bp.route('/sessions/detail/<int:session_id>', methods=['GET'])
+def get_session_detail(session_id: int):
+    """세션 상세 조회 (모든 필드)"""
+    try:
+        record = SessionRecord.query.get_or_404(session_id)
+        return jsonify({'success': True, 'data': record.to_dict()})
+    except Exception as e:
+        logger.error(f"세션 상세 조회 실패: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 @monitoring_bp.route('/sessions/search', methods=['GET'])
 def search_sessions():
@@ -464,7 +477,7 @@ def export_sessions_csv():
             page_size=1000000
         )
         # 컬럼 헤더
-        fieldnames = ['proxy_id','client_ip','server_ip','protocol','user','policy','category','created_at']
+        fieldnames = ['proxy_id','client_ip','server_ip','user','url_host','url','category','created_at','creation_time']
         # CSV 생성
         buffer = StringIO()
         writer = csv.DictWriter(buffer, fieldnames=fieldnames)

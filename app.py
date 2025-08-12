@@ -1,6 +1,6 @@
 """프록시 모니터링 시스템 메인 애플리케이션"""
 
-from flask import Flask, send_from_directory, render_template, jsonify
+from flask import Flask, send_from_directory, render_template, jsonify, request
 import os
 
 def create_app():
@@ -70,6 +70,41 @@ def create_app():
             db.session.add(default_config)
         
         db.session.commit()
+
+        # 경량 스키마 마이그레이션: url_host 컬럼 추가 및 백필
+        try:
+            insp = db.inspect(db.engine)
+            cols = [c['name'] for c in insp.get_columns('session_records')]
+            if 'url_host' not in cols:
+                db.session.execute(db.text('ALTER TABLE session_records ADD COLUMN url_host VARCHAR(255)'))
+                db.session.commit()
+            # 백필: policy -> url, 그리고 url_host 파생
+            from urllib.parse import urlparse
+            records = SessionRecord.query.all()
+            changed = 0
+            for r in records:
+                src_url = r.url or r.policy
+                host = None
+                if src_url:
+                    try:
+                        parsed = urlparse(src_url if '://' in src_url else f'//{src_url}', allow_fragments=True)
+                        host = parsed.hostname
+                    except Exception:
+                        host = None
+                updated = False
+                if (not r.url) and r.policy:
+                    r.url = r.policy
+                    updated = True
+                if (not r.url_host) and (host):
+                    r.url_host = host
+                    updated = True
+                if updated:
+                    changed += 1
+            if changed:
+                db.session.commit()
+        except Exception as e:
+            # 마이그레이션 오류는 무시하고 진행 (로그만 남김)
+            print(f"[WARN] schema migration skipped or failed: {e}")
 
     # 테스트 데이터 생성 엔드포인트
     @app.route('/api/test/generate_data', methods=['POST'])
@@ -173,6 +208,31 @@ def create_app():
                 'success': False,
                 'error': str(e)
             }), 500
+
+    # 호환용 엔드포인트: /api/sessions (그룹/프록시 세션 수집 및 저장)
+    @app.route('/api/sessions', methods=['GET'])
+    def collect_sessions_compat():
+        try:
+            from backend import monitoring_service
+            group_id = int(request.args.get('group_id')) if request.args.get('group_id') else None
+            proxy_id = int(request.args.get('proxy_id')) if request.args.get('proxy_id') else None
+            persist = request.args.get('persist', default='0') == '1'
+            saved = 0
+            if persist:
+                if group_id:
+                    saved = monitoring_service.collect_sessions_by_group(group_id, persist=True)
+                elif proxy_id:
+                    saved = monitoring_service.collect_sessions_by_proxy(proxy_id, replace=True)
+            # 현재 저장된 총 레코드 (필터 적용)
+            query = SessionRecord.query
+            if group_id:
+                query = query.filter(SessionRecord.group_id == group_id)
+            if proxy_id:
+                query = query.filter(SessionRecord.proxy_id == proxy_id)
+            total = query.count()
+            return jsonify({'success': True, 'saved': saved, 'total': total})
+        except Exception as e:
+            return jsonify({'success': False, 'error': str(e)}), 500
 
     return app
 
