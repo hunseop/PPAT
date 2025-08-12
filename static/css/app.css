@@ -125,3 +125,34 @@ body {
 /* Resource summary cards */
 .card.text-center .card-title { font-size: 1.25rem; margin-bottom: 0.25rem; }
 .card.text-center .card-text { margin: 0; }
+
+/* Sessions header controls */
+#sessionsTab .card-header .d-flex select { min-width: 220px; }
+#sessionsTab .card-header .btn { height: 32px; padding: 0 12px; border-radius: 8px; }
+
+/* Unify DataTables buttons appearance */
+.dt-buttons .btn, .dt-buttons .btn.btn-secondary {
+  background: #f1f5f9; color: #0f172a; border: 1px solid var(--border);
+}
+.dt-buttons .btn:hover { background: #e5e7eb; }
+
+/* DataTables layout: move pagination to top and enlarge search input */
+.dataTables_wrapper .dataTables_filter input {
+  width: 320px; max-width: 50vw;
+}
+.dataTables_wrapper .dataTables_length { margin-right: 1rem; }
+
+/* Place top controls in a single row */
+div.dataTables_wrapper div.dataTables_filter { text-align: left; float: none; }
+div.dataTables_wrapper div.dataTables_length { float: left; }
+div.dataTables_wrapper div.dataTables_paginate { float: right; margin-top: 0; }
+
+/* Resource summary group select: shrink */
+#resourcesGroupSelect { max-width: 220px; margin: 0 auto; }
+#resourcesGroupLabel { font-size: 0.95rem; }
+#resourcesTab .card.text-center .card-body { padding: 0.75rem; }
+
+/* Monitoring card: compact */
+#monitoringInterval { max-width: 140px; }
+#monitoringStatus { padding: 0.25rem 0.5rem; font-size: 0.75rem; }
+#sessionsTab .card-header .btn { height: 30px; padding: 0 10px; }

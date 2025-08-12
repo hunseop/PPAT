@@ -314,9 +314,6 @@ function showTab(tabName) {
     document.querySelectorAll('.nav-link').forEach(link => {
         link.classList.remove('active');
     });
-    // 아이콘 교체(초기 렌더 또는 탭 전환 후 보장)
-    replaceFaIcons(document);
-
     // 선택된 탭 표시
     if (tabName === 'management') {
         document.getElementById('managementTab').style.display = 'block';
@@ -1329,6 +1326,7 @@ function getIconForType(type) {
     }
 }
 
+/* Font Awesome 사용으로 SVG 대체 유틸은 미사용(보관) */
 function getIconSvgByFaClass(faClass) {
     const map = {
         'fa-edit': '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16"><path d="M12.854.146a.5.5 0 0 1 .11.54l-.057.07L14 1.5 2.854 12.646a.5.5 0 0 1-.168.11l-.09.029-3 1a.5.5 0 0 1-.63-.63l.029-.09 1-3a.5.5 0 0 1 .11-.168L10.5 1l.646.646L12.207.293l.07-.057a.5.5 0 0 1 .577-.09zM11.5 2.207 3 10.707V11h.293l8.5-8.5L11.5 2.207z"/></svg>',
@@ -1448,16 +1446,15 @@ async function loadSessions() {
                 { targets: [0], visible: false, searchable: false }
             ],
             order: [[10, 'desc']], // 생성일시 기준 내림차순
-            pageLength: AppState.session.pagination.pageSize,
-            dom: 'Bfrtip',
+            pageLength: Math.min(AppState.session.pagination.pageSize, 50),
+            dom: "<'row align-items-center mb-2'<'col-sm-12 col-md-4'l><'col-sm-12 col-md-4 text-center'B><'col-sm-12 col-md-4'f>>"+
+                 "<'row'<'col-sm-12'tr>>"+
+                 "<'row mt-2'<'col-sm-12 col-md-6'i><'col-sm-12 col-md-6 d-flex justify-content-end'p>>",
             buttons: [
-                'copy',
-                'excel',
-                'csv',
-                {
-                    extend: 'colvis',
-                    text: '컬럼 설정'
-                }
+                { extend: 'copy', className: 'btn btn-sm btn-light' },
+                { extend: 'excel', className: 'btn btn-sm btn-light' },
+                { extend: 'csv', className: 'btn btn-sm btn-light' },
+                { extend: 'colvis', text: '컬럼 설정', className: 'btn btn-sm btn-light' }
             ],
             language: {
                 processing: "처리 중...",

@@ -8,6 +8,7 @@
     <link href="https://cdn.datatables.net/1.13.7/css/dataTables.bootstrap5.min.css" rel="stylesheet">
     <link href="https://cdn.datatables.net/buttons/2.4.2/css/buttons.bootstrap5.min.css" rel="stylesheet">
     <link href="https://cdn.datatables.net/responsive/2.5.0/css/responsive.bootstrap5.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <link rel="stylesheet" href="/static/css/app.css">
     <style>
       /* DataTables 커스텀 스타일 */
@@ -216,17 +217,11 @@
                 <div class="row mb-4">
                     <div class="col-12">
                         <div class="card shadow-sm">
-                            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                            <div class="card-header bg-white">
                                 <h6 class="mb-0 text-muted">모니터링 설정</h6>
-                                <div class="d-flex align-items-center gap-2">
-                                    <span class="badge" id="monitoringStatus">정지됨</span>
-                                    <button class="btn btn-sm btn-success" id="startMonitoringBtn" onclick="MonitoringController.startMonitoring()">시작</button>
-                                    <button class="btn btn-sm btn-danger" id="stopMonitoringBtn" onclick="MonitoringController.stopMonitoring()" disabled>중지</button>
-                                    <button class="btn btn-sm btn-outline-primary" id="manualRefreshBtn" onclick="refreshResources()" disabled>수동 새로고침</button>
-                                </div>
                             </div>
                             <div class="card-body">
-                                <div class="row align-items-center">
+                                <div class="row g-3 align-items-center">
                                     <div class="col-md-3">
                                         <label for="monitoringInterval" class="form-label small">갱신 주기 (초)</label>
                                         <select class="form-select form-select-sm" id="monitoringInterval" onchange="MonitoringController.updateInterval(this.value)">
@@ -235,6 +230,9 @@
                                             <option value="60">1분</option>
                                             <option value="300">5분</option>
                                         </select>
+                                        <div class="mt-1">
+                                            <small class="text-muted">수집된 항목: <span class="badge bg-light text-dark" id="collectedItemsCount">8</span></small>
+                                        </div>
                                     </div>
                                     <div class="col-md-6">
                                         <small class="text-muted">
@@ -243,9 +241,12 @@
                                         </small>
                                     </div>
                                     <div class="col-md-3 text-end">
-                                        <small class="text-muted">
-                                            수집된 항목: <span class="badge bg-light text-dark" id="collectedItemsCount">8</span>
-                                        </small>
+                                        <div class="d-inline-flex align-items-center gap-2">
+                                            <span class="badge" id="monitoringStatus">정지됨</span>
+                                            <button class="btn btn-sm btn-success" id="startMonitoringBtn" onclick="MonitoringController.startMonitoring()">시작</button>
+                                            <button class="btn btn-sm btn-danger" id="stopMonitoringBtn" onclick="MonitoringController.stopMonitoring()" disabled>중지</button>
+                                            <button class="btn btn-sm btn-outline-primary" id="manualRefreshBtn" onclick="refreshResources()" disabled>수동 새로고침</button>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -307,13 +308,15 @@
                 <div class="row mb-3">
                     <div class="col-12">
                         <div class="card shadow-sm">
-                            <div class="card-header bg-white d-flex justify-content-between align-items-center">
-                                <h5 class="mb-0 text-muted">세션 브라우저</h5>
-                                                                    <div class="d-flex gap-2 align-items-center">
-                                        <select id="sessionGroupSelect" class="form-select form-select-sm" style="min-width: 200px;"></select>
-                                                                                 <select id="sessionProxySelect" class="form-select form-select-sm" style="min-width: 220px;"></select>
-                                         <button class="btn btn-sm btn-outline-primary" onclick="fetchSessionsFromSource()">가져오기</button>
+                            <div class="card-header bg-white">
+                                <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+                                    <h5 class="mb-0 text-muted">세션 브라우저</h5>
+                                    <div class="d-flex align-items-center gap-2 flex-wrap">
+                                        <select id="sessionGroupSelect" class="form-select form-select-sm"></select>
+                                        <select id="sessionProxySelect" class="form-select form-select-sm"></select>
+                                        <button class="btn btn-sm btn-outline-primary" onclick="fetchSessionsFromSource()"><i class="fas fa-download me-1"></i>가져오기</button>
                                     </div>
+                                </div>
                             </div>
                             <div class="card-body p-0">
                                 <div class="table-responsive">
