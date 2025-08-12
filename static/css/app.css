@@ -1,0 +1,127 @@
+/* Modern Minimal Compact Theme for PPAT */
+:root {
+  --bg: #f7f8fa;
+  --surface: #ffffff;
+  --text: #0f172a;
+  --muted: #6b7280;
+  --border: #e5e7eb;
+  --primary: #3b82f6;
+  --primary-600: #2563eb;
+  --success: #16a34a;
+  --danger: #dc2626;
+  --warning: #d97706;
+  --radius: 10px;
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
+  --shadow: 0 4px 10px rgba(0,0,0,0.06);
+}
+
+html, body {
+  height: 100%;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+  line-height: 1.4;
+}
+
+/* Navbar - minimal, light */
+.navbar {
+  background: #fff !important;
+  border-bottom: 1px solid var(--border);
+}
+.navbar .navbar-brand {
+  color: var(--text);
+  letter-spacing: 0.2px;
+}
+.navbar .nav-link {
+  color: #374151;
+  padding: 0.5rem 0.75rem !important;
+}
+.navbar .nav-link.active {
+  color: var(--primary);
+  font-weight: 600;
+  position: relative;
+}
+.navbar .nav-link.active::after {
+  content: '';
+  position: absolute;
+  left: 0.6rem;
+  right: 0.6rem;
+  bottom: 0.2rem;
+  height: 2px;
+  background: var(--primary);
+  border-radius: 2px;
+}
+
+/* Cards */
+.card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+}
+.card-header {
+  background: #fff !important;
+  border-bottom: 1px solid var(--border);
+  padding: 0.75rem 1rem;
+}
+.card-header h5, .card-header h6 {
+  color: #475569;
+}
+.card-body {
+  background: #fff;
+}
+
+/* Buttons */
+.btn { border-radius: 8px; }
+.btn-primary {
+  background: var(--primary);
+  border-color: var(--primary);
+}
+.btn-primary:hover { background: var(--primary-600); border-color: var(--primary-600); }
+.btn-outline-primary { color: var(--primary); border-color: var(--primary); }
+.btn-outline-primary:hover { background: var(--primary); color: #fff; }
+.btn-success { background: var(--success); border-color: var(--success); }
+.btn-danger { background: var(--danger); border-color: var(--danger); }
+
+/* Forms */
+.form-control, .form-select {
+  border-radius: 8px;
+  border-color: var(--border);
+}
+.form-control:focus, .form-select:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 0.2rem rgba(59, 130, 246, 0.15);
+}
+.form-label.small { color: var(--muted); }
+
+/* Tables - compact */
+.table { margin-bottom: 0; }
+.table th, .table td { padding: 0.5rem 0.75rem; font-size: 0.9rem; vertical-align: middle; }
+.table thead.table-light th { color: #475569; background: #f8fafc; border-bottom-color: var(--border); }
+.table-hover tbody tr:hover { background: #f9fafb; }
+.table td.truncate { max-width: 420px; }
+
+/* Badges */
+.badge { border-radius: 999px; font-weight: 600; }
+
+/* DataTables tweaks */
+.dataTables_wrapper { font-size: 0.9rem; }
+.dataTables_wrapper .dt-buttons { margin: 0.25rem 0 0.75rem 0; }
+.dataTables_wrapper .dataTables_filter { margin-bottom: 0.75rem; }
+.dataTables_wrapper .dataTables_paginate .pagination { --bs-pagination-padding-x: 0.5rem; --bs-pagination-padding-y: 0.25rem; }
+
+/* Modals */
+.modal-content { border-radius: 12px; border: 1px solid var(--border); }
+.modal-header, .modal-footer { border: none; }
+
+/* Utilities */
+.text-muted { color: var(--muted) !important; }
+#notifications .alert { border-radius: 10px; border: 1px solid var(--border); box-shadow: var(--shadow-sm); }
+
+/* Resource summary cards */
+.card.text-center .card-title { font-size: 1.25rem; margin-bottom: 0.25rem; }
+.card.text-center .card-text { margin: 0; }

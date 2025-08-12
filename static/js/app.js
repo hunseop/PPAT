@@ -267,7 +267,15 @@ const AppInitializer = {
 
 // DOM 로드 완료 시 초기화 실행
 document.addEventListener('DOMContentLoaded', () => {
-    AppInitializer.initialize();
+    AppInitializer.initialize().then(() => {
+        const initialTab = (location.hash || '#management').slice(1);
+        const validTabs = ['management', 'resources', 'sessions'];
+        showTab(validTabs.includes(initialTab) ? initialTab : 'management');
+        window.addEventListener('hashchange', () => {
+            const tab = (location.hash || '#management').slice(1);
+            showTab(validTabs.includes(tab) ? tab : 'management');
+        });
+    });
 });
 
 async function initGroupSelectors() {
@@ -330,7 +338,10 @@ function showTab(tabName) {
         // 자동 조회 없음: 사용자가 명시적으로 조회/저장 버튼을 눌러야 함
     }
     
-    currentTab = tabName;
+    AppState.setCurrentTab(tabName);
+    if (location.hash !== '#' + tabName) {
+        history.replaceState(null, '', '#' + tabName);
+    }
 }
 
 // ==================== 관리 탭: 모니터링 설정 CRUD ====================

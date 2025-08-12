@@ -8,7 +8,7 @@
     <link href="https://cdn.datatables.net/1.13.7/css/dataTables.bootstrap5.min.css" rel="stylesheet">
     <link href="https://cdn.datatables.net/buttons/2.4.2/css/buttons.bootstrap5.min.css" rel="stylesheet">
     <link href="https://cdn.datatables.net/responsive/2.5.0/css/responsive.bootstrap5.min.css" rel="stylesheet">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/app.css">
     <style>
       /* DataTables 커스텀 스타일 */
       .dataTables_wrapper { font-size: 0.875rem; }
@@ -23,10 +23,10 @@
       }
     </style>
 </head>
-<body class="bg-light">
+<body>
     <div id="app">
         <!-- 네비게이션 -->
-        <nav class="navbar navbar-expand-lg navbar-dark bg-primary shadow-sm">
+        <nav class="navbar navbar-expand-lg navbar-light bg-white border-bottom shadow-sm">
             <div class="container">
                 <a class="navbar-brand fw-bold" href="#">
                     PPAT
@@ -67,7 +67,7 @@
                             </div>
                             <div class="card-body p-0">
                                 <div class="table-responsive">
-                                    <table class="table table-hover mb-0">
+                                    <table class="table table-hover table-sm mb-0">
                                         <thead class="table-light">
                                             <tr>
                                                 <th class="border-0 ps-3">그룹명</th>
@@ -99,7 +99,7 @@
                             </div>
                             <div class="card-body p-0">
                                 <div class="table-responsive">
-                                    <table class="table table-hover mb-0">
+                                    <table class="table table-hover table-sm mb-0">
                                         <thead class="table-light">
                                             <tr>
                                                 <th class="border-0 ps-3">이름</th>
@@ -262,7 +262,7 @@
                             </div>
                             <div class="card-body p-0">
                                 <div class="table-responsive">
-                                    <table class="table table-hover mb-0">
+                                    <table class="table table-hover table-sm mb-0">
                                         <thead class="table-light">
                                             <tr>
                                                 <th class="border-0 ps-3">프록시</th>
