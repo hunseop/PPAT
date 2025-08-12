@@ -1473,22 +1473,37 @@ async function fetchSessionsFromSource() {
         return showNotification('그룹 또는 프록시를 선택하세요.', 'warning');
     }
     try {
+        let ok = true;
         if (groupId) {
+            // 신 라우트 (그룹 수집)
             const res = await fetch(`/api/monitoring/sessions/group/${groupId}?persist=1`);
             const json = await res.json();
-            if (!json || json.success !== true) {
-                showNotification('그룹 세션 수집 실패', 'danger');
+            ok = json && json.success === true;
+            if (!ok) {
+                // 호환 라우트 시도
+                const res2 = await fetch(`/api/sessions?group_id=${groupId}&persist=1`);
+                const json2 = await res2.json();
+                ok = json2 && json2.success === true;
             }
         } else if (proxyId) {
+            // 신 라우트 (프록시 수집)
             const res = await fetch(`/api/monitoring/sessions/${proxyId}?persist=1`);
             const json = await res.json();
-            if (!json || json.error) {
-                showNotification('프록시 세션 수집 실패', 'danger');
+            ok = !(json && json.error);
+            if (!ok) {
+                // 호환 라우트 시도
+                const res2 = await fetch(`/api/sessions?proxy_id=${proxyId}&persist=1`);
+                const json2 = await res2.json();
+                ok = json2 && json2.success === true;
             }
         }
-        // 수집 후 테이블 새로 고침
+        if (!ok) {
+            showNotification('세션 수집 실패', 'danger');
+        } else {
+            showNotification('세션을 수집했습니다.', 'success');
+        }
+        // 수집 후 테이블 새로 고침 (DB 기반)
         loadSessions();
-        showNotification('세션을 수집했습니다.', 'success');
     } catch (e) {
         console.error(e);
         showNotification('세션 수집 중 오류가 발생했습니다.', 'danger');

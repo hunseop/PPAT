@@ -220,8 +220,7 @@ class MonitoringService:
                     age_seconds=to_int(pick(s, ['Age(seconds)'])),
                     in_use=pick(s, ['In use']),
                     url=url_full,
-                    url_host=extract_host(url_full),
-                    extra=None
+                    url_host=extract_host(url_full)
                 )
                 db.session.add(rec)
                 saved += 1
@@ -325,8 +324,7 @@ class MonitoringService:
                 age_seconds=to_int(pick(s, ['Age(seconds)'])),
                 in_use=pick(s, ['In use']),
                 url=url_full,
-                url_host=extract_host(url_full),
-                extra=None
+                url_host=extract_host(url_full)
             )
             db.session.add(rec)
             saved += 1

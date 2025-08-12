@@ -1,6 +1,6 @@
 """프록시 모니터링 시스템 메인 애플리케이션"""
 
-from flask import Flask, send_from_directory, render_template, jsonify
+from flask import Flask, send_from_directory, render_template, jsonify, request
 import os
 
 def create_app():
@@ -208,6 +208,31 @@ def create_app():
                 'success': False,
                 'error': str(e)
             }), 500
+
+    # 호환용 엔드포인트: /api/sessions (그룹/프록시 세션 수집 및 저장)
+    @app.route('/api/sessions', methods=['GET'])
+    def collect_sessions_compat():
+        try:
+            from backend import monitoring_service
+            group_id = int(request.args.get('group_id')) if request.args.get('group_id') else None
+            proxy_id = int(request.args.get('proxy_id')) if request.args.get('proxy_id') else None
+            persist = request.args.get('persist', default='0') == '1'
+            saved = 0
+            if persist:
+                if group_id:
+                    saved = monitoring_service.collect_sessions_by_group(group_id, persist=True)
+                elif proxy_id:
+                    saved = monitoring_service.collect_sessions_by_proxy(proxy_id, replace=True)
+            # 현재 저장된 총 레코드 (필터 적용)
+            query = SessionRecord.query
+            if group_id:
+                query = query.filter(SessionRecord.group_id == group_id)
+            if proxy_id:
+                query = query.filter(SessionRecord.proxy_id == proxy_id)
+            total = query.count()
+            return jsonify({'success': True, 'saved': saved, 'total': total})
+        except Exception as e:
+            return jsonify({'success': False, 'error': str(e)}), 500
 
     return app
 
