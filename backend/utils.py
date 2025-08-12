@@ -19,13 +19,24 @@ def interruptible_sleep(seconds, is_running):
 def split_line(lst: str) -> list:
     """파이프 구분 문자열을 리스트로 분리 (양쪽 공백 허용)
     예: 'a | b|c| d ' -> ['a','b','c','d']
+    
+    테이블 형식으로 선두/말미에 파이프가 있는 경우("| a | b |"),
+    선두/말미의 빈 셀만 제거하고 내부의 빈 값은 유지한다.
     """
     if lst is None:
         return []
     # 줄끝 개행 제거 및 앞뒤 공백 제거 후 파이프 기준 분리
-    parts = re.split(r"\s*\|\s*", lst.strip().rstrip('\n'))
-    # 공백만 있는 빈 요소 제거
-    return [p.strip() for p in parts if p is not None]
+    line = lst.strip().rstrip('\n')
+    parts = re.split(r"\s*\|\s*", line)
+
+    # 선두/말미의 빈 요소만 제거 (내부의 빈 값은 보존)
+    if parts and (parts[0] is None or parts[0].strip() == ""):
+        parts = parts[1:]
+    if parts and (parts[-1] is None or parts[-1].strip() == ""):
+        parts = parts[:-1]
+
+    # 각 요소 트리밍 (내부 빈 값은 그대로 남김)
+    return [p.strip() if p is not None else "" for p in parts]
 
 def get_current_timestamp():
     """현재 시간을 반환"""

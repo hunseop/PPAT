@@ -216,7 +216,18 @@ def update_monitoring_config():
 def get_sessions():
     """활성 프록시들에 대한 세션 목록/요약 조회"""
     try:
-        active_proxies = ProxyServer.query.filter_by(is_active=True).all()
+        group_id = request.args.get('group_id', type=int)
+        persist = request.args.get('persist', default='0') == '1'
+        query = ProxyServer.query.filter_by(is_active=True)
+        if group_id:
+            query = query.filter(ProxyServer.group_id == group_id)
+        active_proxies = query.all()
+
+        # 선택적으로 그룹 전체를 DB에 저장 (조회 시 자동 저장 옵션)
+        saved = 0
+        if group_id and persist:
+            saved = monitoring_service.collect_sessions_by_group(group_id, persist=True)
+
         results = []
         for proxy in active_proxies:
             try:
@@ -239,11 +250,12 @@ def get_sessions():
                     'is_main': proxy.is_main,
                     'unique_clients': info.get('unique_clients', 0),
                     'total_sessions': info.get('total_sessions', 0),
+                    'headers': info.get('headers') or [],
                     'sessions': info.get('sessions', [])
                 })
             except Exception as e:
                 logger.error(f"세션 조회 실패 ({proxy.name}): {e}")
-        return jsonify({'success': True, 'data': results})
+        return jsonify({'success': True, 'data': results, 'saved': saved})
     except Exception as e:
         logger.error(f"세션 목록 조회 실패: {e}")
         return jsonify({'error': str(e)}), 500
@@ -257,6 +269,12 @@ def get_sessions_by_proxy(proxy_id):
             return jsonify({'error': '비활성 프록시입니다.'}), 400
         if not proxy.username or not proxy.password:
             return jsonify({'error': 'SSH 자격 증명이 없습니다.'}), 400
+
+        # 옵션: 조회 시 저장
+        persist = request.args.get('persist', default='0') == '1'
+        saved = 0
+        if persist:
+            saved = monitoring_service.collect_sessions_by_proxy(proxy_id, replace=True)
 
         monitor = ProxyMonitor(
             host=proxy.host,
@@ -275,7 +293,9 @@ def get_sessions_by_proxy(proxy_id):
             'is_main': proxy.is_main,
             'unique_clients': info.get('unique_clients', 0),
             'total_sessions': info.get('total_sessions', 0),
-            'sessions': info.get('sessions', [])
+            'headers': info.get('headers') or [],
+            'sessions': info.get('sessions', []),
+            'saved': saved
         })
     except Exception as e:
         logger.error(f"특정 프록시 세션 조회 실패: {e}")
@@ -292,14 +312,168 @@ def collect_sessions_by_group(group_id):
         logger.error(f"그룹 세션 수집 실패: {e}")
         return jsonify({'error': str(e)}), 500
 
+@monitoring_bp.route('/sessions/datatables', methods=['GET'])
+def get_sessions_datatables():
+    """DataTables 서버 사이드 처리 API"""
+    try:
+        # DataTables 파라미터 파싱
+        draw = request.args.get('draw', type=int)
+        start = request.args.get('start', type=int, default=0)
+        length = request.args.get('length', type=int, default=10)
+        search_value = request.args.get('search[value]', type=str)
+        
+        # 정렬 파라미터
+        order_column = request.args.get('order[0][column]', type=int)
+        order_dir = request.args.get('order[0][dir]', type=str)
+        
+        # 컬럼 매핑
+        columns = ['proxy_id', 'client_ip', 'server_ip', 'protocol', 'user', 'policy', 
+                  'category', 'cl_bytes_sent', 'cl_bytes_received', 'age_seconds', 'created_at']
+        
+        # 필터 파라미터
+        group_id = request.args.get('group_id', type=int)
+        proxy_id = request.args.get('proxy_id', type=int)
+        
+        # 쿼리 구성
+        query = SessionRecord.query
+        
+        # 그룹/프록시 필터
+        if group_id:
+            query = query.filter(SessionRecord.group_id == group_id)
+        if proxy_id:
+            query = query.filter(SessionRecord.proxy_id == proxy_id)
+            
+        # 검색어 적용
+        if search_value:
+            search_filter = []
+            for column in ['client_ip', 'server_ip', 'protocol', 'user', 'policy', 'category']:
+                search_filter.append(getattr(SessionRecord, column).ilike(f'%{search_value}%'))
+            query = query.filter(db.or_(*search_filter))
+            
+        # 전체 레코드 수
+        total_records = query.count()
+        filtered_records = total_records
+        
+        # 정렬
+        if order_column is not None and order_dir:
+            column = columns[order_column]
+            if order_dir == 'desc':
+                query = query.order_by(db.desc(getattr(SessionRecord, column)))
+            else:
+                query = query.order_by(getattr(SessionRecord, column))
+        
+        # 페이징
+        query = query.offset(start).limit(length)
+        
+        # 결과 포맷팅
+        data = []
+        for record in query.all():
+            data.append([
+                record.proxy_id,
+                record.client_ip,
+                record.server_ip,
+                record.protocol,
+                record.user,
+                record.policy,
+                record.category,
+                record.cl_bytes_sent,
+                record.cl_bytes_received,
+                record.age_seconds,
+                record.created_at.isoformat() if record.created_at else None
+            ])
+        
+        return jsonify({
+            'draw': draw,
+            'recordsTotal': total_records,
+            'recordsFiltered': filtered_records,
+            'data': data
+        })
+        
+    except Exception as e:
+        logger.error(f"DataTables 데이터 조회 실패: {e}")
+        return jsonify({
+            'draw': request.args.get('draw', type=int),
+            'recordsTotal': 0,
+            'recordsFiltered': 0,
+            'data': [],
+            'error': str(e)
+        }), 500
+
 @monitoring_bp.route('/sessions/search', methods=['GET'])
 def search_sessions():
-    """임시저장된 세션 검색. 파라미터: group_id, q(키워드)"""
+    """임시저장된 세션 검색. 파라미터: group_id, proxy_id, q(키워드), protocol, status, client_ip, server_ip, user, url, page, page_size"""
     try:
         group_id = request.args.get('group_id', type=int)
+        proxy_id = request.args.get('proxy_id', type=int)
         keyword = request.args.get('q', type=str)
-        records = monitoring_service.search_sessions(group_id, keyword, limit=1000)
-        return jsonify({'success': True, 'data': records})
+        protocol = request.args.get('protocol', type=str)
+        status = request.args.get('status', type=str)
+        client_ip = request.args.get('client_ip', type=str)
+        server_ip = request.args.get('server_ip', type=str)
+        user = request.args.get('user', type=str)
+        url_contains = request.args.get('url', type=str)
+        page = request.args.get('page', default=1, type=int)
+        page_size = request.args.get('page_size', default=100, type=int)
+
+        items, total = monitoring_service.search_sessions_paginated(
+            group_id=group_id,
+            proxy_id=proxy_id,
+            keyword=keyword,
+            protocol=protocol,
+            status=status,
+            client_ip=client_ip,
+            server_ip=server_ip,
+            user=user,
+            url_contains=url_contains,
+            page=page,
+            page_size=page_size
+        )
+        return jsonify({'success': True, 'data': items, 'total': total, 'page': page, 'page_size': page_size})
     except Exception as e:
         logger.error(f"세션 검색 실패: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@monitoring_bp.route('/sessions/export', methods=['GET'])
+def export_sessions_csv():
+    """필터를 적용한 임시저장 세션 CSV 다운로드"""
+    try:
+        import csv
+        from io import StringIO
+        from flask import Response
+        group_id = request.args.get('group_id', type=int)
+        proxy_id = request.args.get('proxy_id', type=int)
+        keyword = request.args.get('q', type=str)
+        protocol = request.args.get('protocol', type=str)
+        status = request.args.get('status', type=str)
+        client_ip = request.args.get('client_ip', type=str)
+        server_ip = request.args.get('server_ip', type=str)
+        user = request.args.get('user', type=str)
+        url_contains = request.args.get('url', type=str)
+        # 전체 내보내기: 페이지 제한 없이
+        items, total = monitoring_service.search_sessions_paginated(
+            group_id=group_id,
+            proxy_id=proxy_id,
+            keyword=keyword,
+            protocol=protocol,
+            status=status,
+            client_ip=client_ip,
+            server_ip=server_ip,
+            user=user,
+            url_contains=url_contains,
+            page=1,
+            page_size=1000000
+        )
+        # 컬럼 헤더
+        fieldnames = ['proxy_id','client_ip','server_ip','protocol','user','policy','category','created_at']
+        # CSV 생성
+        buffer = StringIO()
+        writer = csv.DictWriter(buffer, fieldnames=fieldnames)
+        writer.writeheader()
+        for r in items:
+            writer.writerow({k: r.get(k, '') for k in fieldnames})
+        csv_content = buffer.getvalue()
+        buffer.close()
+        return Response(csv_content, mimetype='text/csv', headers={'Content-Disposition': 'attachment; filename=sessions.csv'})
+    except Exception as e:
+        logger.error(f"CSV 내보내기 실패: {e}")
         return jsonify({'error': str(e)}), 500

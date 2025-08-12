@@ -1,49 +1,273 @@
 // 프록시 모니터링 시스템 - 관리 페이지 (PPAT)
 
-let proxies = [];
-let groups = []; // New: Array to store proxy groups
-let resources = []; // New: Array to store resource data
-let editingProxy = null;
-let editingGroup = null; // New: Variable for editing group
-let modal = null;
-let groupModal = null; // New: Bootstrap modal instance for groups
-let currentTab = 'management'; // 현재 활성 탭
+// 설정 관리 모듈
+const ConfigManager = {
+    // 기본 설정값
+    defaults: {
+        monitoring: {
+            intervalTime: 30,
+            cpuThreshold: 80,
+            memoryThreshold: 80,
+            defaultInterval: 30,
+            pageSize: 100
+        },
+        proxy: {
+            sshPort: 22,
+            snmpPort: 161,
+            snmpVersion: 'v2c',
+            snmpCommunity: 'public',
+            username: 'root'
+        }
+    },
+    
+    // 설정 로드
+    async loadConfig() {
+        try {
+            const response = await fetch('/api/monitoring/config');
+            if (response.ok) {
+                const config = await response.json();
+                return {
+                    monitoring: {
+                        intervalTime: config.default_interval || this.defaults.monitoring.intervalTime,
+                        cpuThreshold: config.cpu_threshold || this.defaults.monitoring.cpuThreshold,
+                        memoryThreshold: config.memory_threshold || this.defaults.monitoring.memoryThreshold,
+                        defaultInterval: config.default_interval || this.defaults.monitoring.defaultInterval,
+                        pageSize: this.defaults.monitoring.pageSize
+                    },
+                    proxy: { ...this.defaults.proxy }
+                };
+            }
+        } catch (error) {
+            console.error('설정 로드 실패:', error);
+        }
+        return {
+            monitoring: { ...this.defaults.monitoring },
+            proxy: { ...this.defaults.proxy }
+        };
+    },
+    
+    // 설정 저장
+    async saveConfig(config) {
+        try {
+            const response = await fetch('/api/monitoring/config', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    default_interval: config.monitoring.defaultInterval,
+                    cpu_threshold: config.monitoring.cpuThreshold,
+                    memory_threshold: config.monitoring.memoryThreshold
+                })
+            });
+            
+            if (response.ok) {
+                return true;
+            }
+            throw new Error('설정 저장 실패');
+        } catch (error) {
+            console.error('설정 저장 오류:', error);
+            throw error;
+        }
+    }
+};
 
-// 모니터링 관련 변수
-let monitoringInterval = null;
-let monitoringIntervalTime = 30; // 기본 30초
-let isMonitoringActive = false;
-let nextUpdateTimeout = null;
-
-// 세션 브라우저 데이터
-let sessions = [];
-let resourcesGroupId = null;
-let sessionsGroupId = null;
+// 상태 관리 모듈
+const AppState = {
+    // 프록시 관련 상태
+    proxy: {
+        list: [],
+        editing: null,
+        modal: null
+    },
+    
+    // 그룹 관련 상태
+    group: {
+        list: [],
+        editing: null,
+        modal: null
+    },
+    
+    // 모니터링 관련 상태
+    monitoring: {
+        resources: [],
+        interval: null,
+        intervalTime: 30,
+        isActive: false,
+        nextUpdateTimeout: null,
+        config: {
+            cpuThreshold: 80,
+            memoryThreshold: 80,
+            defaultInterval: 30
+        }
+    },
+    
+    // 세션 관련 상태
+    session: {
+        list: [],
+        headers: [],
+        groupId: null,
+        resourcesGroupId: null,
+        filters: {
+            protocol: '',
+            status: '',
+            client_ip: '',
+            server_ip: '',
+            user: '',
+            url: '',
+            q: ''
+        },
+        pagination: {
+            page: 1,
+            pageSize: 100,
+            total: 0
+        }
+    },
+    
+    // 현재 활성 탭
+    currentTab: 'management',
+    
+    // 상태 업데이트 메서드들
+    updateProxies(proxies) {
+        this.proxy.list = proxies;
+    },
+    
+    updateGroups(groups) {
+        this.group.list = groups;
+    },
+    
+    updateResources(resources) {
+        this.monitoring.resources = resources;
+    },
+    
+    updateSessions(sessions) {
+        this.session.list = sessions;
+    },
+    
+    setCurrentTab(tab) {
+        this.currentTab = tab;
+    },
+    
+    // 모니터링 상태 관리
+    startMonitoring() {
+        this.monitoring.isActive = true;
+    },
+    
+    stopMonitoring() {
+        this.monitoring.isActive = false;
+        if (this.monitoring.interval) {
+            clearInterval(this.monitoring.interval);
+            this.monitoring.interval = null;
+        }
+        if (this.monitoring.nextUpdateTimeout) {
+            clearTimeout(this.monitoring.nextUpdateTimeout);
+            this.monitoring.nextUpdateTimeout = null;
+        }
+    },
+    
+    // 세션 페이지네이션 관리
+    updateSessionPagination(page, total) {
+        this.session.pagination.page = page;
+        this.session.pagination.total = total;
+    },
+    
+    setSessionPageSize(size) {
+        this.session.pagination.pageSize = size;
+    }
+};
 
 // DOM 로드 완료 후 초기화
-document.addEventListener('DOMContentLoaded', function() {
-    console.log('PPAT 시스템 초기화 중...');
+// 애플리케이션 초기화 컨트롤러
+const AppInitializer = {
+    // 초기화 실행
+    async initialize() {
+        console.log('PPAT 시스템 초기화 중...');
+        
+        try {
+            // 설정 로드
+            const config = await ConfigManager.loadConfig();
+            this.applyConfig(config);
+            
+            // Bootstrap 모달 초기화
+            this.initializeModals();
+            
+            // 초기 데이터 로드
+            await this.loadInitialData();
+            
+            // 자동 새로고침 설정
+            this.setupAutoRefresh();
+            
+            // 페이지 언로드 핸들러 설정
+            this.setupUnloadHandler();
+            
+            console.log('PPAT 시스템 초기화 완료');
+        } catch (error) {
+            console.error('시스템 초기화 실패:', error);
+            showNotification('시스템 초기화 중 오류가 발생했습니다.', 'danger');
+        }
+    },
     
-    // Bootstrap 모달 초기화
-    modal = new bootstrap.Modal(document.getElementById('proxyModal'));
-    groupModal = new bootstrap.Modal(document.getElementById('groupModal')); // New: Initialize group modal
+    // 설정 적용
+    applyConfig(config) {
+        AppState.monitoring.intervalTime = config.monitoring.intervalTime;
+        AppState.monitoring.config = {
+            cpuThreshold: config.monitoring.cpuThreshold,
+            memoryThreshold: config.monitoring.memoryThreshold,
+            defaultInterval: config.monitoring.defaultInterval
+        };
+        AppState.session.pagination.pageSize = config.monitoring.pageSize;
+    },
+    
+    // 모달 초기화
+    initializeModals() {
+        AppState.proxy.modal = new bootstrap.Modal(document.getElementById('proxyModal'));
+        AppState.group.modal = new bootstrap.Modal(document.getElementById('groupModal'));
+    },
     
     // 초기 데이터 로드
-    loadGroups(); // New: Load groups on startup
-    loadProxies();
+    async loadInitialData() {
+        await Promise.all([
+            loadGroups(),
+            loadProxies(),
+            initGroupSelectors()
+        ]);
+    },
     
-    // 관리 탭은 주기적 업데이트 (30초마다)
-    setInterval(() => {
-        if (currentTab === 'management') {
-            loadProxies();
-            loadGroups();
-        }
-    }, 30000);
+    // 자동 새로고침 설정
+    setupAutoRefresh() {
+        const interval = AppState.monitoring.config.defaultInterval * 1000;
+        AppState.monitoring.autoRefreshInterval = setInterval(() => {
+            if (AppState.currentTab === 'management') {
+                this.refreshManagementData();
+            }
+        }, interval);
+    },
+    
+    // 관리 탭 데이터 새로고침
+    async refreshManagementData() {
+        await Promise.all([
+            loadProxies(),
+            loadGroups()
+        ]);
+    },
+    
+    // 언로드 핸들러 설정
+    setupUnloadHandler() {
+        window.addEventListener('beforeunload', () => {
+            if (AppState.monitoring.autoRefreshInterval) {
+                clearInterval(AppState.monitoring.autoRefreshInterval);
+            }
+            if (AppState.monitoring.interval) {
+                clearInterval(AppState.monitoring.interval);
+            }
+            if (AppState.monitoring.nextUpdateTimeout) {
+                clearTimeout(AppState.monitoring.nextUpdateTimeout);
+            }
+        });
+    }
+};
 
-    // 관리 탭의 모니터링 설정 초기 로드
-    loadMonitoringConfig();
-    // 그룹 셀렉트 초기화
-    initGroupSelectors();
+// DOM 로드 완료 시 초기화 실행
+document.addEventListener('DOMContentLoaded', () => {
+    AppInitializer.initialize();
 });
 
 async function initGroupSelectors() {
@@ -55,7 +279,7 @@ async function initGroupSelectors() {
         const resSel = document.getElementById('resourcesGroupSelect');
         if (resSel) {
             resSel.innerHTML = '<option value="">전체 그룹</option>' + data.map(g => `<option value="${g.id}">${g.name}</option>`).join('');
-            resSel.onchange = () => { resourcesGroupId = resSel.value ? parseInt(resSel.value) : null; if (isMonitoringActive) { loadResourcesData(); } };
+            resSel.onchange = () => { AppState.session.resourcesGroupId = resSel.value ? parseInt(resSel.value) : null; if (AppState.monitoring.isActive) { loadResourcesData(); } };
         }
         // 세션 탭 그룹
         const sesSel = document.getElementById('sessionGroupSelect');
@@ -103,6 +327,7 @@ function showTab(tabName) {
         document.querySelector('a[onclick="showTab(\'sessions\')"]').classList.add('active');
         populateSessionProxySelect();
         initGroupSelectors();
+        // 자동 조회 없음: 사용자가 명시적으로 조회/저장 버튼을 눌러야 함
     }
     
     currentTab = tabName;
@@ -463,17 +688,17 @@ function updateProxyTable() {
 // 프록시 모달 표시
 function showModal() {
     console.log('프록시 모달 표시');
-    editingProxy = null;
+    AppState.proxy.editing = null;
     document.getElementById('modalTitle').textContent = '프록시 추가';
     clearForm();
-    modal.show();
+    AppState.proxy.modal.show();
 }
 
 // 프록시 모달 닫기
 function closeModal() {
     console.log('프록시 모달 닫기');
-    modal.hide();
-    editingProxy = null;
+    AppState.proxy.modal.hide();
+    AppState.proxy.editing = null;
     clearForm();
 }
 
@@ -496,14 +721,61 @@ function clearForm() {
 // 프록시 저장
 async function saveProxy() {
     console.log('프록시 저장 시작');
-    const name = document.getElementById('proxyName').value.trim();
-    const host = document.getElementById('proxyHost').value.trim();
     
-    console.log('프록시 입력값:', { name, host });
+    // 입력값 수집 및 검증
+    const formData = {
+        name: document.getElementById('proxyName').value.trim(),
+        host: document.getElementById('proxyHost').value.trim(),
+        ssh_port: document.getElementById('proxySshPort').value,
+        snmp_port: document.getElementById('proxySnmpPort').value,
+        snmp_version: document.getElementById('proxySnmpVersion').value,
+        snmp_community: document.getElementById('proxySnmpCommunity').value,
+        username: document.getElementById('proxyUsername').value,
+        password: document.getElementById('proxyPassword').value,
+        description: document.getElementById('proxyDescription').value,
+        is_active: document.getElementById('proxyIsActive').checked,
+        is_main: document.getElementById('proxyIsMain').checked,
+        group_id: document.getElementById('proxyGroup').value
+    };
     
-    if (!name || !host) {
-        showNotification('이름과 IP 주소는 필수 항목입니다.', 'warning');
+    // 필수 필드 검증
+    const requiredFields = ['name', 'host'];
+    for (const field of requiredFields) {
+        const error = ErrorHandler.validateInput(formData[field], [ValidationRules.required]);
+        if (error) {
+            showNotification(`${field === 'name' ? '이름' : 'IP 주소'}은(는) ${error}`, 'warning');
+            return;
+        }
+    }
+    
+    // IP 주소 형식 검증
+    const ipError = ErrorHandler.validateInput(formData.host, [ValidationRules.ipAddress]);
+    if (ipError) {
+        showNotification(ipError, 'warning');
         return;
+    }
+    
+    // 비밀번호 검증 (새로운 프록시 추가 시 또는 비밀번호 변경 시)
+    if (!AppState.proxy.editing && !formData.password) {
+        showNotification('비밀번호는 필수 항목입니다.', 'warning');
+        return;
+    }
+    if (formData.password) {
+        const passwordError = ErrorHandler.validateInput(formData.password, [ValidationRules.password]);
+        if (passwordError) {
+            showNotification(passwordError, 'warning');
+            return;
+        }
+    }
+    
+    // 포트 번호 검증
+    const portFields = ['ssh_port', 'snmp_port'];
+    for (const field of portFields) {
+        const portError = ErrorHandler.validateInput(formData[field], [ValidationRules.port]);
+        if (portError) {
+            showNotification(`${field === 'ssh_port' ? 'SSH' : 'SNMP'} ${portError}`, 'warning');
+            return;
+        }
     }
     
     const saveButton = document.getElementById('saveButton');
@@ -512,65 +784,49 @@ async function saveProxy() {
     saveButton.disabled = true;
     
     try {
-        const groupId = document.getElementById('proxyGroup').value;
+        // 데이터 정제
         const data = {
-            name: name,
-            host: host,
-            ssh_port: parseInt(document.getElementById('proxySshPort').value) || 22,
-            snmp_port: parseInt(document.getElementById('proxySnmpPort').value) || 161,
-            snmp_version: document.getElementById('proxySnmpVersion').value,
-            snmp_community: document.getElementById('proxySnmpCommunity').value,
-            username: document.getElementById('proxyUsername').value || 'root',
-            password: document.getElementById('proxyPassword').value || '123456',
-            description: document.getElementById('proxyDescription').value,
-            is_active: document.getElementById('proxyIsActive').checked,
-            is_main: document.getElementById('proxyIsMain').checked,
-            group_id: groupId ? parseInt(groupId) : null
+            ...formData,
+            ssh_port: parseInt(formData.ssh_port),
+            snmp_port: parseInt(formData.snmp_port),
+            group_id: formData.group_id ? parseInt(formData.group_id) : null
         };
         
-        const method = editingProxy ? 'PUT' : 'POST';
-        const url = editingProxy ? `/api/proxies/${editingProxy.id}` : '/api/proxies';
-        
-        console.log('프록시 요청 데이터:', data);
-        console.log('프록시 요청 URL:', url, 'Method:', method);
+        const method = AppState.proxy.editing ? 'PUT' : 'POST';
+        const url = AppState.proxy.editing ? 
+            `/api/proxies/${AppState.proxy.editing.id}` : 
+            '/api/proxies';
         
         const response = await fetch(url, {
             method: method,
-            headers: {
-                'Content-Type': 'application/json'
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(data)
         });
-        
-        console.log('프록시 응답 상태:', response.status);
         
         if (response.ok) {
             const result = await response.json();
             console.log('프록시 저장 성공:', result);
-            await loadProxies();
-            await loadGroups(); // 그룹 카운트 업데이트
-            closeModal();
+            
+            // 데이터 새로고침
+            await Promise.all([
+                loadProxies(),
+                loadGroups()
+            ]);
+            
+            AppState.proxy.modal.hide();
             showNotification(
-                editingProxy ? '프록시가 수정되었습니다.' : '프록시가 추가되었습니다.', 
+                AppState.proxy.editing ? '프록시가 수정되었습니다.' : '프록시가 추가되었습니다.', 
                 'success'
             );
         } else {
-            const errorText = await response.text();
-            console.error('프록시 서버 오류:', response.status, errorText);
-            
-            let errorMessage = '알 수 없는 오류';
-            try {
-                const error = JSON.parse(errorText);
-                errorMessage = error.message || error.error || errorText;
-            } catch {
-                errorMessage = errorText;
-            }
-            
+            const errorMessage = await ErrorHandler.handleApiError(response, {
+                409: '동일한 이름 또는 IP 주소를 가진 프록시가 이미 존재합니다.'
+            });
             showNotification('프록시 저장 실패: ' + errorMessage, 'danger');
         }
     } catch (error) {
         console.error('프록시 저장 오류:', error);
-        showNotification('프록시 저장 중 오류: ' + error.message, 'danger');
+        showNotification('네트워크 오류가 발생했습니다. 잠시 후 다시 시도해주세요.', 'danger');
     } finally {
         saveButton.innerHTML = originalText;
         saveButton.disabled = false;
@@ -663,7 +919,7 @@ async function testConnection(proxyId) {
 async function loadResourcesData() {
     console.log('자원사용률 데이터 로딩 시작...');
     try {
-        const qs = resourcesGroupId ? `?group_id=${resourcesGroupId}` : '';
+        const qs = AppState.session.resourcesGroupId ? `?group_id=${AppState.session.resourcesGroupId}` : '';
         const response = await fetch(`/api/monitoring/resources${qs}`);
         console.log('Resources response status:', response.status);
         
@@ -792,128 +1048,151 @@ function updateLastUpdate() {
 // 자원사용률 새로고침
 async function refreshResources() {
     console.log('자원사용률 수동 새로고침');
-    await loadResourcesData();
-    await loadMonitoringSummary();
+    await MonitoringController.executeMonitoringTask();
     showNotification('자원사용률이 업데이트되었습니다.', 'info');
 }
 
 // ==================== 모니터링 컨트롤 ====================
 
-// 모니터링 시작
-function startMonitoring() {
-    if (isMonitoringActive) return;
+// 모니터링 컨트롤러
+const MonitoringController = {
+    // 모니터링 작업 큐
+    taskQueue: Promise.resolve(),
     
-    console.log(`모니터링 시작 - 주기: ${monitoringIntervalTime}초`);
-    isMonitoringActive = true;
-    
-    // UI 업데이트
-    updateMonitoringUI();
-    // 수동 새로고침 버튼 활성화
-    const refreshBtn = document.getElementById('manualRefreshBtn');
-    if (refreshBtn) refreshBtn.disabled = false;
-    
-    // 즉시 첫 번째 데이터 로드
-    loadResourcesData();
-    loadMonitoringSummary();
-    
-    // 주기적 업데이트 시작
-    monitoringInterval = setInterval(() => {
-        loadResourcesData();
-        loadMonitoringSummary();
-    }, monitoringIntervalTime * 1000);
-    
-    // 다음 업데이트 시간 표시 시작
-    updateNextUpdateTime();
-    
-    showNotification('모니터링이 시작되었습니다.', 'success');
-}
-
-// 모니터링 중지
-function stopMonitoring() {
-    if (!isMonitoringActive) return;
-    
-    console.log('모니터링 중지');
-    isMonitoringActive = false;
-    
-    // 인터벌 정리
-    if (monitoringInterval) {
-        clearInterval(monitoringInterval);
-        monitoringInterval = null;
-    }
-    
-    if (nextUpdateTimeout) {
-        clearTimeout(nextUpdateTimeout);
-        nextUpdateTimeout = null;
-    }
-    
-    // 수동 새로고침 버튼 비활성화
-    const refreshBtn = document.getElementById('manualRefreshBtn');
-    if (refreshBtn) refreshBtn.disabled = true;
-
-    // UI 업데이트
-    updateMonitoringUI();
-    document.getElementById('nextUpdate').textContent = '-';
-    
-    showNotification('모니터링이 중지되었습니다.', 'warning');
-}
-
-// 모니터링 주기 업데이트
-function updateMonitoringInterval() {
-    const newInterval = parseInt(document.getElementById('monitoringInterval').value);
-    monitoringIntervalTime = newInterval;
-    
-    console.log(`모니터링 주기 변경: ${monitoringIntervalTime}초`);
-    
-    // 모니터링이 활성 상태라면 재시작
-    if (isMonitoringActive) {
-        stopMonitoring();
-        setTimeout(() => startMonitoring(), 100);
-    }
-    
-    showNotification(`모니터링 주기가 ${monitoringIntervalTime}초로 변경되었습니다.`, 'info');
-}
-
-// 모니터링 UI 업데이트
-function updateMonitoringUI() {
-    const status = document.getElementById('monitoringStatus');
-    const startBtn = document.getElementById('startMonitoringBtn');
-    const stopBtn = document.getElementById('stopMonitoringBtn');
-    
-    if (isMonitoringActive) {
-        status.textContent = '실행중';
-        status.className = 'badge bg-success';
-        startBtn.disabled = true;
-        stopBtn.disabled = false;
-    } else {
-        status.textContent = '정지됨';
-        status.className = 'badge bg-secondary';
-        startBtn.disabled = false;
-        stopBtn.disabled = true;
-    }
-}
-
-// 다음 업데이트 시간 표시
-function updateNextUpdateTime() {
-    if (!isMonitoringActive) return;
-    
-    let countdown = monitoringIntervalTime;
-    
-    const updateCountdown = () => {
-        if (!isMonitoringActive) return;
+    // 모니터링 시작
+    async startMonitoring() {
+        if (AppState.monitoring.isActive) return;
         
-        document.getElementById('nextUpdate').textContent = `${countdown}초 후`;
-        countdown--;
+        console.log(`모니터링 시작 - 주기: ${AppState.monitoring.intervalTime}초`);
+        AppState.monitoring.isActive = true;
         
-        if (countdown >= 0) {
-            nextUpdateTimeout = setTimeout(updateCountdown, 1000);
-        } else {
-            countdown = monitoringIntervalTime;
-            nextUpdateTimeout = setTimeout(updateCountdown, 1000);
+        // UI 업데이트
+        this.updateUI();
+        
+        // 수동 새로고침 버튼 활성화
+        const refreshBtn = document.getElementById('manualRefreshBtn');
+        if (refreshBtn) refreshBtn.disabled = false;
+        
+        // 초기 데이터 로드
+        await this.executeMonitoringTask();
+        
+        // 주기적 업데이트 시작
+        AppState.monitoring.interval = setInterval(() => {
+            this.executeMonitoringTask();
+        }, AppState.monitoring.intervalTime * 1000);
+        
+        // 다음 업데이트 시간 표시 시작
+        this.startCountdown();
+        
+        showNotification('모니터링이 시작되었습니다.', 'success');
+    },
+    
+    // 모니터링 중지
+    stopMonitoring() {
+        if (!AppState.monitoring.isActive) return;
+        
+        console.log('모니터링 중지');
+        AppState.monitoring.isActive = false;
+        
+        // 인터벌 정리
+        if (AppState.monitoring.interval) {
+            clearInterval(AppState.monitoring.interval);
+            AppState.monitoring.interval = null;
         }
-    };
+        
+        if (AppState.monitoring.nextUpdateTimeout) {
+            clearTimeout(AppState.monitoring.nextUpdateTimeout);
+            AppState.monitoring.nextUpdateTimeout = null;
+        }
+        
+        // 수동 새로고침 버튼 비활성화
+        const refreshBtn = document.getElementById('manualRefreshBtn');
+        if (refreshBtn) refreshBtn.disabled = true;
+        
+        // UI 업데이트
+        this.updateUI();
+        document.getElementById('nextUpdate').textContent = '-';
+        
+        showNotification('모니터링이 중지되었습니다.', 'warning');
+    },
     
-    updateCountdown();
-}
+    // 모니터링 주기 업데이트
+    async updateInterval(newInterval) {
+        AppState.monitoring.intervalTime = parseInt(newInterval);
+        
+        console.log(`모니터링 주기 변경: ${AppState.monitoring.intervalTime}초`);
+        
+        // 모니터링이 활성 상태라면 재시작
+        if (AppState.monitoring.isActive) {
+            this.stopMonitoring();
+            await new Promise(resolve => setTimeout(resolve, 100));
+            await this.startMonitoring();
+        }
+        
+        showNotification(`모니터링 주기가 ${AppState.monitoring.intervalTime}초로 변경되었습니다.`, 'info');
+    },
+    
+    // UI 업데이트
+    updateUI() {
+        const status = document.getElementById('monitoringStatus');
+        const startBtn = document.getElementById('startMonitoringBtn');
+        const stopBtn = document.getElementById('stopMonitoringBtn');
+        
+        if (AppState.monitoring.isActive) {
+            status.textContent = '실행중';
+            status.className = 'badge bg-success';
+            startBtn.disabled = true;
+            stopBtn.disabled = false;
+        } else {
+            status.textContent = '정지됨';
+            status.className = 'badge bg-secondary';
+            startBtn.disabled = false;
+            stopBtn.disabled = true;
+        }
+    },
+    
+    // 카운트다운 시작
+    startCountdown() {
+        if (!AppState.monitoring.isActive) return;
+        
+        let countdown = AppState.monitoring.intervalTime;
+        
+        const updateCountdown = () => {
+            if (!AppState.monitoring.isActive) return;
+            
+            document.getElementById('nextUpdate').textContent = `${countdown}초 후`;
+            countdown--;
+            
+            if (countdown >= 0) {
+                AppState.monitoring.nextUpdateTimeout = setTimeout(updateCountdown, 1000);
+            } else {
+                countdown = AppState.monitoring.intervalTime;
+                AppState.monitoring.nextUpdateTimeout = setTimeout(updateCountdown, 1000);
+            }
+        };
+        
+        updateCountdown();
+    },
+    
+    // 모니터링 작업 실행 (큐 사용)
+    async executeMonitoringTask() {
+        // 이전 작업이 완료될 때까지 대기
+        this.taskQueue = this.taskQueue.then(async () => {
+            try {
+                // 병렬로 데이터 로드
+                await Promise.all([
+                    loadResourcesData(),
+                    loadMonitoringSummary()
+                ]);
+            } catch (error) {
+                console.error('모니터링 작업 실행 중 오류:', error);
+                showNotification('모니터링 데이터 수집 중 오류가 발생했습니다.', 'danger');
+            }
+        });
+        
+        return this.taskQueue;
+    }
+};
 
 // 수집된 항목 수 업데이트
 function updateCollectedItemsCount() {
@@ -925,6 +1204,82 @@ function updateCollectedItemsCount() {
 }
 
 // ==================== 공통 유틸리티 ====================
+
+// 에러 처리 유틸리티
+const ErrorHandler = {
+    // API 에러 처리
+    async handleApiError(response, customErrorMap = {}) {
+        let errorMessage = '알 수 없는 오류가 발생했습니다.';
+        
+        try {
+            const errorData = await response.json();
+            
+            // 커스텀 에러 매핑 확인
+            if (customErrorMap[response.status]) {
+                errorMessage = customErrorMap[response.status];
+            } else if (errorData.message) {
+                errorMessage = errorData.message;
+            } else if (errorData.error) {
+                errorMessage = errorData.error;
+            }
+        } catch (e) {
+            // JSON 파싱 실패 시 HTTP 상태 기반 메시지
+            errorMessage = this.getHttpStatusMessage(response.status);
+        }
+        
+        return errorMessage;
+    },
+    
+    // HTTP 상태 코드별 기본 메시지
+    getHttpStatusMessage(status) {
+        const statusMessages = {
+            400: '잘못된 요청입니다.',
+            401: '인증이 필요합니다.',
+            403: '접근이 거부되었습니다.',
+            404: '요청한 리소스를 찾을 수 없습니다.',
+            409: '요청이 현재 서버의 상태와 충돌합니다.',
+            500: '서버 내부 오류가 발생했습니다.',
+            502: '게이트웨이 오류가 발생했습니다.',
+            503: '서비스를 사용할 수 없습니다.',
+            504: '게이트웨이 시간 초과가 발생했습니다.'
+        };
+        
+        return statusMessages[status] || '서버와 통신 중 오류가 발생했습니다.';
+    },
+    
+    // 입력 값 검증
+    validateInput(value, rules) {
+        for (const rule of rules) {
+            if (!rule.validate(value)) {
+                return rule.message;
+            }
+        }
+        return null;
+    }
+};
+
+// 입력 검증 규칙
+const ValidationRules = {
+    required: {
+        validate: value => value !== undefined && value !== null && value.toString().trim() !== '',
+        message: '이 필드는 필수입니다.'
+    },
+    ipAddress: {
+        validate: value => /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/.test(value),
+        message: '올바른 IP 주소 형식이 아닙니다.'
+    },
+    password: {
+        validate: value => /^(?=.*[A-Za-z])(?=.*\d)(?=.*[@$!%*#?&])[A-Za-z\d@$!%*#?&]{8,}$/.test(value),
+        message: '비밀번호는 8자 이상이며, 영문, 숫자, 특수문자를 포함해야 합니다.'
+    },
+    port: {
+        validate: value => {
+            const port = parseInt(value);
+            return !isNaN(port) && port >= 1 && port <= 65535;
+        },
+        message: '포트는 1-65535 사이의 숫자여야 합니다.'
+    }
+};
 
 // 알림 표시 (PRD 기준: 미니멀 디자인)
 function showNotification(message, type = 'info') {
@@ -983,113 +1338,128 @@ function populateSessionProxySelect() {
 
 async function loadSessions() {
     const select = document.getElementById('sessionProxySelect');
+    const gsel = document.getElementById('sessionGroupSelect');
     const proxyId = select && select.value ? parseInt(select.value) : null;
+    AppState.session.groupId = gsel && gsel.value ? parseInt(gsel.value) : AppState.session.groupId;
+
     try {
-        const url = proxyId ? `/api/monitoring/sessions/${proxyId}` : '/api/monitoring/sessions';
-        const res = await fetch(url);
-        if (!res.ok) {
-            const txt = await res.text();
-            return showNotification(`세션 조회 실패: ${txt}`, 'danger');
+        // 그룹 또는 프록시를 선택한 경우에만 조회
+        if (!proxyId && !AppState.session.groupId) {
+            return showNotification('그룹 또는 프록시를 선택하세요.', 'warning');
         }
-        const data = await res.json();
-        sessions = proxyId ? [data] : (data.data || []);
-        updateSessionsTable(sessions);
+
+        // 기존 DataTable 제거
+        const table = $('#sessionsTable').DataTable();
+        if (table) {
+            table.destroy();
+        }
+
+        // DataTables 초기화
+        $('#sessionsTable').DataTable({
+            serverSide: true,
+            processing: true,
+            ajax: {
+                url: '/api/monitoring/sessions/datatables',
+                data: function(d) {
+                    d.group_id = AppState.session.groupId;
+                    d.proxy_id = proxyId;
+                }
+            },
+            columns: [
+                { title: 'Proxy', data: 0 },
+                { title: 'Client IP', data: 1 },
+                { title: 'Server IP', data: 2 },
+                { title: 'Protocol', data: 3 },
+                { title: 'User', data: 4 },
+                { title: 'Policy', data: 5 },
+                { title: 'Category', data: 6 },
+                { 
+                    title: 'Bytes Sent',
+                    data: 7,
+                    render: function(data) {
+                        return data ? formatBytes(data) : '-';
+                    }
+                },
+                { 
+                    title: 'Bytes Received',
+                    data: 8,
+                    render: function(data) {
+                        return data ? formatBytes(data) : '-';
+                    }
+                },
+                { 
+                    title: 'Age',
+                    data: 9,
+                    render: function(data) {
+                        return data ? formatDuration(data) : '-';
+                    }
+                },
+                { 
+                    title: 'Created At',
+                    data: 10,
+                    render: function(data) {
+                        return data ? new Date(data).toLocaleString() : '-';
+                    }
+                }
+            ],
+            order: [[10, 'desc']], // 생성일시 기준 내림차순
+            pageLength: AppState.session.pagination.pageSize,
+            dom: 'Bfrtip',
+            buttons: [
+                'copy',
+                'excel',
+                'csv',
+                {
+                    extend: 'colvis',
+                    text: '컬럼 설정'
+                }
+            ],
+            language: {
+                processing: "처리 중...",
+                search: "검색:",
+                lengthMenu: "_MENU_ 개씩 보기",
+                info: "_START_ - _END_ / _TOTAL_",
+                infoEmpty: "데이터 없음",
+                infoFiltered: "(_MAX_ 개의 데이터에서 필터링됨)",
+                infoPostFix: "",
+                loadingRecords: "로딩중...",
+                zeroRecords: "검색 결과가 없습니다",
+                emptyTable: "데이터가 없습니다",
+                paginate: {
+                    first: "처음",
+                    previous: "이전",
+                    next: "다음",
+                    last: "마지막"
+                }
+            },
+            responsive: true
+        });
+
     } catch (e) {
         console.error('세션 로드 오류:', e);
         showNotification('세션 로드 중 오류가 발생했습니다.', 'danger');
     }
 }
 
-function updateSessionsTable(items) {
-    const tbody = document.getElementById('sessionsTableBody');
-    const emptyMessage = document.getElementById('sessionsEmptyMessage');
-    if (!tbody) return;
-
-    if (!items || items.length === 0) {
-        tbody.innerHTML = '';
-        if (emptyMessage) emptyMessage.style.display = 'block';
-        return;
-    }
-
-    if (emptyMessage) emptyMessage.style.display = 'none';
-
-    const rows = [];
-    items.forEach(item => {
-        const proxyName = item.proxy_name || item.host || '';
-        (item.sessions || []).forEach(s => {
-            rows.push(`
-                <tr>
-                    <td class="ps-3">${proxyName}</td>
-                    <td>${s['Transaction'] || '-'}</td>
-                    <td>${s['Creation Time'] || '-'}</td>
-                    <td>${s['Protocol'] || '-'}</td>
-                    <td>${s['Cust ID'] || '-'}</td>
-                    <td>${s['User Name'] || s['User'] || '-'}</td>
-                    <td>${s['Client IP'] || '-'}</td>
-                    <td>${s['Server IP'] || '-'}</td>
-                    <td>${s['URL'] || '-'}</td>
-                    <td>${s['Age(seconds) Status'] || s['Status'] || '-'}</td>
-                </tr>
-            `);
-        });
-    });
-
-    tbody.innerHTML = rows.join('');
+// 바이트 크기 포맷팅
+function formatBytes(bytes) {
+    if (!bytes) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 }
 
-async function collectSessionsByGroup() {
-    if (!sessionsGroupId) return showNotification('그룹을 선택하세요.', 'warning');
-    try {
-        const res = await fetch(`/api/monitoring/sessions/group/${sessionsGroupId}?persist=1`);
-        if (!res.ok) {
-            const txt = await res.text();
-            return showNotification(`수집 실패: ${txt}`, 'danger');
-        }
-        showNotification('세션 수집이 완료되었습니다.', 'success');
-    } catch (e) {
-        showNotification('세션 수집 중 오류가 발생했습니다.', 'danger');
-    }
+// 시간 간격 포맷팅
+function formatDuration(seconds) {
+    if (!seconds) return '0s';
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    const s = seconds % 60;
+    const parts = [];
+    if (h > 0) parts.push(h + 'h');
+    if (m > 0) parts.push(m + 'm');
+    if (s > 0 || parts.length === 0) parts.push(s + 's');
+    return parts.join(' ');
 }
 
-async function searchSessions() {
-    const qInput = document.getElementById('sessionSearchInput');
-    const keyword = qInput ? qInput.value.trim() : '';
-    const params = new URLSearchParams();
-    if (sessionsGroupId) params.set('group_id', sessionsGroupId);
-    if (keyword) params.set('q', keyword);
-    try {
-        const res = await fetch(`/api/monitoring/sessions/search?${params.toString()}`);
-        if (!res.ok) {
-            const txt = await res.text();
-            return showNotification(`검색 실패: ${txt}`, 'danger');
-        }
-        const data = await res.json();
-        // search 결과 포맷에 맞춰 테이블 렌더링
-        updateSessionsSearchTable(data.data || []);
-    } catch (e) {
-        showNotification('세션 검색 중 오류가 발생했습니다.', 'danger');
-    }
-}
-
-function updateSessionsSearchTable(items) {
-    const tbody = document.getElementById('sessionsTableBody');
-    const emptyMessage = document.getElementById('sessionsEmptyMessage');
-    if (!tbody) return;
-    if (!items || items.length === 0) {
-        tbody.innerHTML = '';
-        if (emptyMessage) emptyMessage.style.display = 'block';
-        return;
-    }
-    if (emptyMessage) emptyMessage.style.display = 'none';
-    tbody.innerHTML = items.map(r => `
-        <tr>
-            <td class="ps-3">${r.proxy_id || '-'}</td>
-            <td>${r.client_ip || '-'}</td>
-            <td>${r.server_ip || '-'}</td>
-            <td>${r.protocol || '-'}</td>
-            <td>${r.user || '-'}</td>
-            <td>${r.policy || '-'}</td>
-            <td>${r.category || '-'}</td>
-        </tr>
-    `).join('');
-}

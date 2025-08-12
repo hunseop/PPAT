@@ -3,6 +3,7 @@
 import paramiko
 import time
 import logging
+import re
 from datetime import datetime
 from typing import Dict, List, Any, Optional, Tuple
 from .utils import get_current_timestamp, validate_resource_data, logger, split_line
@@ -199,35 +200,78 @@ class ProxyMonitor:
             if len(session_lines) < 2:
                 return {'unique_clients': 0, 'total_sessions': 0, 'sessions': []}
             
-            # 헤더와 데이터 분리
-            # 헤더 라인 탐색 (첫 번째 비어있지 않고 파이프 포함된 줄)
-            header_idx = None
+            # 기대 헤더 목록 (순서 고정)
+            expected_headers = [
+                'Transaction', 'Creation Time', 'Protocol', 'Cust ID', 'User Name', 'Client IP',
+                'Client Side MWG IP', 'Server Side MWG IP', 'Server IP',
+                'CL Bytes Received', 'CL Bytes Sent', 'SRV Bytes Received', 'SRV Bytes Sent',
+                'Trxn Index', 'Age(seconds)', 'Status', 'In use', 'URL'
+            ]
+
+            def is_separator_line(line: str) -> bool:
+                stripped = line.strip()
+                if not stripped:
+                    return True
+                # 제거: 구분선 같은 라인 (대시/플러스/이퀄스/스페이스/파이프만 구성)
+                without_pipes = stripped.replace('|', '').replace('+', '').replace('=', '').replace('-', '').strip()
+                return without_pipes == ''
+
+            # 헤더 라인 탐색: 파이프 포함, 기대 컬럼 일부 키워드 존재
+            header_idx: Optional[int] = None
+            header: List[str] = []
             for idx, ln in enumerate(session_lines):
-                if '|' in ln:
+                if '|' not in ln:
+                    continue
+                if is_separator_line(ln):
+                    continue
+                cols = split_line(ln)
+                # 헤더 식별: 필수 키워드 포함 검사
+                if {'Transaction', 'Creation Time', 'URL'}.issubset(set(cols)):
                     header_idx = idx
+                    header = cols
                     break
+            
+            if header_idx is None:
+                # 폴백: 최초의 파이프 포함 라인을 헤더로 간주
+                for idx, ln in enumerate(session_lines):
+                    if '|' in ln:
+                        header_idx = idx
+                        header = split_line(ln)
+                        break
+            
             if header_idx is None:
                 return {'unique_clients': 0, 'total_sessions': 0, 'sessions': []}
-            header = split_line(session_lines[header_idx])
+
             data_lines = session_lines[header_idx + 1:]
             
-            sessions = []
+            sessions: List[Dict[str, Any]] = []
             client_ips = set()
             
             for line in data_lines:
+                if '|' not in line:
+                    continue
+                if is_separator_line(line):
+                    continue
                 try:
                     data = split_line(line)
-                    if len(data) >= len(header):
-                        session = {}
-                        for i, column in enumerate(header):
-                            session[column] = data[i] if i < len(data) else ''
-                        sessions.append(session)
-                        
-                        # Client IP 추출 (포트 구분자 ':' 제거)
-                        client_ip = (session.get('Client IP') or '').strip()
-                        if client_ip:
-                            client_ips.add(client_ip.split(':')[0])
-                        
+                    # 컬럼 수 보정: 부족하면 패딩, 초과하면 마지막 컬럼으로 병합
+                    if len(data) < len(header):
+                        data = data + [''] * (len(header) - len(data))
+                    elif len(data) > len(header):
+                        data = data[:len(header) - 1] + [' | '.join(data[len(header) - 1:])]
+
+                    session: Dict[str, Any] = {}
+                    for i, column in enumerate(header):
+                        # 헤더 공백 정상화
+                        col_name = column.strip()
+                        session[col_name] = data[i] if i < len(data) else ''
+                    sessions.append(session)
+                    
+                    # Client IP 추출 (포트 구분자 ':' 제거)
+                    client_ip = (session.get('Client IP') or '').strip()
+                    if client_ip:
+                        client_ips.add(client_ip.split(':')[0])
+                    
                 except Exception as e:
                     logger.error(f"세션 데이터 파싱 오류: {e}")
                     continue
@@ -235,6 +279,7 @@ class ProxyMonitor:
             return {
                 'unique_clients': len(client_ips),
                 'total_sessions': len(sessions),
+                'headers': header,
                 'sessions': sessions
             }
             
