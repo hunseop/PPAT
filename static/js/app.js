@@ -314,25 +314,27 @@ function showTab(tabName) {
     document.querySelectorAll('.nav-link').forEach(link => {
         link.classList.remove('active');
     });
-    
+    // 아이콘 교체(초기 렌더 또는 탭 전환 후 보장)
+    replaceFaIcons(document);
+
     // 선택된 탭 표시
     if (tabName === 'management') {
         document.getElementById('managementTab').style.display = 'block';
-        document.querySelector('a[onclick="showTab(\'management\')"]').classList.add('active');
+        const link = document.querySelector('a[href="#management"]'); if (link) link.classList.add('active');
         loadGroups();
         loadProxies();
         loadMonitoringConfig();
         initGroupSelectors();
     } else if (tabName === 'resources') {
         document.getElementById('resourcesTab').style.display = 'block';
-        document.querySelector('a[onclick="showTab(\'resources\')"]').classList.add('active');
+        const link = document.querySelector('a[href="#resources"]'); if (link) link.classList.add('active');
         // 자동 호출 제거: 수동 시작만 가능
         // loadResourcesData();
         // loadMonitoringSummary();
         initGroupSelectors();
     } else if (tabName === 'sessions') {
         if (sessionsTab) sessionsTab.style.display = 'block';
-        document.querySelector('a[onclick="showTab(\'sessions\')"]').classList.add('active');
+        const link = document.querySelector('a[href="#sessions"]'); if (link) link.classList.add('active');
         populateSessionProxySelect();
         initGroupSelectors();
         // 자동 조회 없음: 사용자가 명시적으로 조회/저장 버튼을 눌러야 함
@@ -1326,6 +1328,35 @@ function getIconForType(type) {
         default: return 'fa-info-circle';
     }
 }
+
+function getIconSvgByFaClass(faClass) {
+    const map = {
+        'fa-edit': '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16"><path d="M12.854.146a.5.5 0 0 1 .11.54l-.057.07L14 1.5 2.854 12.646a.5.5 0 0 1-.168.11l-.09.029-3 1a.5.5 0 0 1-.63-.63l.029-.09 1-3a.5.5 0 0 1 .11-.168L10.5 1l.646.646L12.207.293l.07-.057a.5.5 0 0 1 .577-.09zM11.5 2.207 3 10.707V11h.293l8.5-8.5L11.5 2.207z"/></svg>',
+        'fa-trash': '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16"><path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5m2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5m3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0z"/><path d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4zM2.5 3h11V2h-11z"/></svg>',
+        'fa-plug': '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16"><path d="M6 2a1 1 0 0 1 1 1v3h2V3a1 1 0 1 1 2 0v3a2 2 0 0 1-2 2H8v2.5A3.5 3.5 0 0 1 4.5 14H3a1 1 0 1 1 0-2h1.5A1.5 1.5 0 0 0 6 10.5V8H5A2 2 0 0 1 3 6V3a1 1 0 1 1 2 0v3h1V3a1 1 0 0 1 1-1z"/></svg>',
+        'fa-spinner': '<svg class="spin" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" stroke="currentColor" stroke-width="2" fill="none" opacity="0.2"/><path d="M15 8a7 7 0 0 1-7 7" stroke="currentColor" stroke-width="2" fill="none"/></svg>'
+    };
+    return map[faClass] || '';
+}
+
+function replaceFaIcons(container) {
+    if (!container) return;
+    container.querySelectorAll('i.fas, i.fa').forEach(i => {
+        const classes = [...i.classList];
+        const faType = classes.find(c => c.startsWith('fa-') && c !== 'fa-spin');
+        const svg = getIconSvgByFaClass(faType || '');
+        if (svg) {
+            const span = document.createElement('span');
+            span.className = i.className.replace('fas', '').replace('fa', '').trim();
+            span.innerHTML = svg;
+            i.replaceWith(span);
+        }
+    });
+}
+
+const style = document.createElement('style');
+style.innerHTML = `.spin{animation:spin 1s linear infinite}@keyframes spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}`;
+document.head.appendChild(style);
 
 // ==================== 세션 브라우저 ====================
 function populateSessionProxySelect() {
