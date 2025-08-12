@@ -402,7 +402,7 @@ def get_sessions_datatables():
             'error': str(e)
         }), 500
 
-@monitoring_bp.route('/sessions/<int:session_id>', methods=['GET'])
+@monitoring_bp.route('/sessions/detail/<int:session_id>', methods=['GET'])
 def get_session_detail(session_id: int):
     """세션 상세 조회 (모든 필드)"""
     try:

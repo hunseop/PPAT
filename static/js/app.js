@@ -1445,7 +1445,7 @@ async function loadSessions() {
             if (!rowData) return;
             const id = rowData[0];
             try {
-                const res = await fetch(`/api/monitoring/sessions/${id}`);
+                const res = await fetch(`/api/monitoring/sessions/detail/${id}`);
                 const json = await res.json();
                 if (json && json.success) {
                     showSessionDetailModal(json.data);
@@ -1461,6 +1461,37 @@ async function loadSessions() {
     } catch (e) {
         console.error('세션 로드 오류:', e);
         showNotification('세션 로드 중 오류가 발생했습니다.', 'danger');
+    }
+}
+
+async function fetchSessionsFromSource() {
+    const gsel = document.getElementById('sessionGroupSelect');
+    const psel = document.getElementById('sessionProxySelect');
+    const groupId = gsel && gsel.value ? parseInt(gsel.value) : null;
+    const proxyId = psel && psel.value ? parseInt(psel.value) : null;
+    if (!groupId && !proxyId) {
+        return showNotification('그룹 또는 프록시를 선택하세요.', 'warning');
+    }
+    try {
+        if (groupId) {
+            const res = await fetch(`/api/monitoring/sessions/group/${groupId}?persist=1`);
+            const json = await res.json();
+            if (!json || json.success !== true) {
+                showNotification('그룹 세션 수집 실패', 'danger');
+            }
+        } else if (proxyId) {
+            const res = await fetch(`/api/monitoring/sessions/${proxyId}?persist=1`);
+            const json = await res.json();
+            if (!json || json.error) {
+                showNotification('프록시 세션 수집 실패', 'danger');
+            }
+        }
+        // 수집 후 테이블 새로 고침
+        loadSessions();
+        showNotification('세션을 수집했습니다.', 'success');
+    } catch (e) {
+        console.error(e);
+        showNotification('세션 수집 중 오류가 발생했습니다.', 'danger');
     }
 }
 
