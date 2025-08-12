@@ -1,0 +1,168 @@
+/* Modern Minimal Compact Theme for PPAT */
+:root {
+  --bg: #f7f8fa;
+  --surface: #ffffff;
+  --text: #0f172a;
+  --muted: #6b7280;
+  --border: #e5e7eb;
+  --primary: #3b82f6;
+  --primary-600: #2563eb;
+  --success: #16a34a;
+  --danger: #dc2626;
+  --warning: #d97706;
+  --radius: 10px;
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
+  --shadow: 0 4px 10px rgba(0,0,0,0.06);
+}
+
+html, body {
+  height: 100%;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+  line-height: 1.4;
+}
+
+/* Navbar - minimal, light */
+.navbar {
+  background: #fff !important;
+  border-bottom: 1px solid var(--border);
+}
+.navbar .navbar-brand {
+  color: var(--text);
+  letter-spacing: 0.2px;
+}
+.navbar .nav-link {
+  color: #374151;
+  padding: 0.5rem 0.75rem !important;
+}
+.navbar .nav-link.active {
+  color: var(--primary);
+  font-weight: 600;
+  position: relative;
+}
+.navbar .nav-link.active::after {
+  content: '';
+  position: absolute;
+  left: 0.6rem;
+  right: 0.6rem;
+  bottom: 0.2rem;
+  height: 2px;
+  background: var(--primary);
+  border-radius: 2px;
+}
+
+/* Cards */
+.card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+}
+.card-header {
+  background: #fff !important;
+  border-bottom: 1px solid var(--border);
+  padding: 0.75rem 1rem;
+}
+.card-header h5, .card-header h6 {
+  color: #475569;
+}
+.card-body {
+  background: #fff;
+}
+
+/* Buttons */
+.btn { border-radius: 8px; }
+.btn-primary {
+  background: var(--primary);
+  border-color: var(--primary);
+}
+.btn-primary:hover { background: var(--primary-600); border-color: var(--primary-600); }
+.btn-outline-primary { color: var(--primary); border-color: var(--primary); }
+.btn-outline-primary:hover { background: var(--primary); color: #fff; }
+.btn-success { background: var(--success); border-color: var(--success); }
+.btn-danger { background: var(--danger); border-color: var(--danger); }
+
+/* Forms */
+.form-control, .form-select {
+  border-radius: 8px;
+  border-color: var(--border);
+}
+.form-control:focus, .form-select:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 0.2rem rgba(59, 130, 246, 0.15);
+}
+.form-label.small { color: var(--muted); }
+
+/* Tables - compact */
+.table { margin-bottom: 0; }
+.table th, .table td { padding: 0.5rem 0.75rem; font-size: 0.9rem; vertical-align: middle; }
+.table thead.table-light th { color: #475569; background: #f8fafc; border-bottom-color: var(--border); }
+.table-hover tbody tr:hover { background: #f9fafb; }
+.table td.truncate { max-width: 420px; }
+
+/* Badges */
+.badge { border-radius: 999px; font-weight: 600; }
+
+/* DataTables tweaks */
+.dataTables_wrapper { font-size: 0.9rem; }
+.dataTables_wrapper .dt-buttons { margin: 0.25rem 0 0.75rem 0; }
+.dataTables_wrapper .dataTables_filter { margin-bottom: 0.75rem; }
+.dataTables_wrapper .dataTables_paginate .pagination { --bs-pagination-padding-x: 0.5rem; --bs-pagination-padding-y: 0.25rem; }
+
+/* Modals */
+.modal-content { border-radius: 12px; border: 1px solid var(--border); }
+.modal-header, .modal-footer { border: none; }
+
+/* Utilities */
+.text-muted { color: var(--muted) !important; }
+#notifications .alert { border-radius: 10px; border: 1px solid var(--border); box-shadow: var(--shadow-sm); }
+
+/* Resource summary cards */
+.card.text-center .card-title { font-size: 1.25rem; margin-bottom: 0.25rem; }
+.card.text-center .card-text { margin: 0; }
+
+/* Sessions header controls */
+#sessionsTab .card-header .d-flex select { min-width: 220px; }
+#sessionsTab .card-header .btn { height: 32px; padding: 0 12px; border-radius: 8px; }
+
+/* Unify DataTables buttons appearance */
+.dt-buttons .btn, .dt-buttons .btn.btn-secondary {
+  background: #f1f5f9; color: #0f172a; border: 1px solid var(--border);
+}
+.dt-buttons .btn:hover { background: #e5e7eb; }
+
+/* DataTables layout: move pagination to top and enlarge search input */
+.dataTables_wrapper .dataTables_filter input {
+  width: 320px; max-width: 50vw;
+}
+.dataTables_wrapper .dataTables_length { margin-right: 1rem; }
+
+/* Place top controls in a single row */
+div.dataTables_wrapper div.dataTables_filter { text-align: left; float: none; }
+div.dataTables_wrapper div.dataTables_length { float: left; }
+div.dataTables_wrapper div.dataTables_paginate { float: right; margin-top: 0; }
+
+/* Resource summary group select: shrink */
+#resourcesGroupSelect { max-width: 220px; margin: 0 auto; }
+#resourcesGroupLabel { font-size: 0.95rem; }
+#resourcesTab .card.text-center .card-body { padding: 0.75rem; }
+
+/* Monitoring card: compact */
+#monitoringInterval { max-width: 140px; }
+#monitoringStatus { padding: 0.25rem 0.5rem; font-size: 0.75rem; }
+#sessionsTab .card-header .btn { height: 30px; padding: 0 10px; }
+
+/* Tone down colorful text in resources */
+#resourcesTab .card .card-title.text-primary { color: #2563eb !important; }
+#resourcesTab .card .card-title.text-success { color: #16a34a !important; }
+#resourcesTab .card .card-title.text-secondary { color: #475569 !important; }
+#resourcesTab .badge, #resourcesTab .text-primary, #resourcesTab .text-success { filter: saturate(0.9); }
+
+/* Monitoring row: allocate more space to control buttons */
+#resourcesTab .card .row.align-items-center > .col-md-6 { flex: 0 0 auto; width: 45%; }
+#resourcesTab .card .row.align-items-center > .col-md-3.text-end { flex: 0 0 auto; width: 35%; }

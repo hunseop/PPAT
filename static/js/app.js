@@ -267,7 +267,15 @@ const AppInitializer = {
 
 // DOM 로드 완료 시 초기화 실행
 document.addEventListener('DOMContentLoaded', () => {
-    AppInitializer.initialize();
+    AppInitializer.initialize().then(() => {
+        const initialTab = (location.hash || '#management').slice(1);
+        const validTabs = ['management', 'resources', 'sessions'];
+        showTab(validTabs.includes(initialTab) ? initialTab : 'management');
+        window.addEventListener('hashchange', () => {
+            const tab = (location.hash || '#management').slice(1);
+            showTab(validTabs.includes(tab) ? tab : 'management');
+        });
+    });
 });
 
 async function initGroupSelectors() {
@@ -306,31 +314,33 @@ function showTab(tabName) {
     document.querySelectorAll('.nav-link').forEach(link => {
         link.classList.remove('active');
     });
-    
     // 선택된 탭 표시
     if (tabName === 'management') {
         document.getElementById('managementTab').style.display = 'block';
-        document.querySelector('a[onclick="showTab(\'management\')"]').classList.add('active');
+        const link = document.querySelector('a[href="#management"]'); if (link) link.classList.add('active');
         loadGroups();
         loadProxies();
         loadMonitoringConfig();
         initGroupSelectors();
     } else if (tabName === 'resources') {
         document.getElementById('resourcesTab').style.display = 'block';
-        document.querySelector('a[onclick="showTab(\'resources\')"]').classList.add('active');
+        const link = document.querySelector('a[href="#resources"]'); if (link) link.classList.add('active');
         // 자동 호출 제거: 수동 시작만 가능
         // loadResourcesData();
         // loadMonitoringSummary();
         initGroupSelectors();
     } else if (tabName === 'sessions') {
         if (sessionsTab) sessionsTab.style.display = 'block';
-        document.querySelector('a[onclick="showTab(\'sessions\')"]').classList.add('active');
+        const link = document.querySelector('a[href="#sessions"]'); if (link) link.classList.add('active');
         populateSessionProxySelect();
         initGroupSelectors();
         // 자동 조회 없음: 사용자가 명시적으로 조회/저장 버튼을 눌러야 함
     }
     
-    currentTab = tabName;
+    AppState.setCurrentTab(tabName);
+    if (location.hash !== '#' + tabName) {
+        history.replaceState(null, '', '#' + tabName);
+    }
 }
 
 // ==================== 관리 탭: 모니터링 설정 CRUD ====================
@@ -459,113 +469,66 @@ function updateGroupSelect() {
     });
 }
 
-// 그룹 모달 표시
 function showGroupModal() {
     console.log('그룹 모달 표시');
-    editingGroup = null;
+    AppState.group.editing = null;
     document.getElementById('groupModalTitle').textContent = '프록시 그룹 추가';
     clearGroupForm();
-    groupModal.show();
+    AppState.group.modal.show();
 }
 
-// 그룹 모달 닫기
 function closeGroupModal() {
     console.log('그룹 모달 닫기');
-    groupModal.hide();
-    editingGroup = null;
+    AppState.group.modal.hide();
+    AppState.group.editing = null;
     clearGroupForm();
 }
 
-// 그룹 폼 초기화
 function clearGroupForm() {
     document.getElementById('groupName').value = '';
     document.getElementById('groupDescription').value = '';
 }
 
-// 그룹 저장
 async function saveGroup() {
     console.log('그룹 저장 시작');
     const name = document.getElementById('groupName').value.trim();
-    
-    console.log('그룹 입력값:', { name });
-    
-    if (!name) {
-        showNotification('그룹 이름은 필수 항목입니다.', 'warning');
-        return;
-    }
-    
+    if (!name) { showNotification('그룹 이름은 필수 항목입니다.', 'warning'); return; }
     const saveButton = document.getElementById('saveGroupButton');
     const originalText = saveButton.innerHTML;
     saveButton.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>저장중...';
     saveButton.disabled = true;
-    
     try {
-        const data = {
-            name: name,
-            description: document.getElementById('groupDescription').value
-        };
-        
-        const method = editingGroup ? 'PUT' : 'POST';
-        const url = editingGroup ? `/api/groups/${editingGroup.id}` : '/api/groups';
-        
-        console.log('그룹 요청 데이터:', data);
-        console.log('그룹 요청 URL:', url, 'Method:', method);
-        
-        const response = await fetch(url, {
-            method: method,
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(data)
-        });
-        
-        console.log('그룹 응답 상태:', response.status);
-        
-        if (response.ok) {
-            const result = await response.json();
-            console.log('그룹 저장 성공:', result);
-            await loadGroups();
-            closeGroupModal();
-            showNotification(
-                editingGroup ? '그룹이 수정되었습니다.' : '그룹이 추가되었습니다.', 
-                'success'
-            );
-        } else {
-            const errorText = await response.text();
-            console.error('그룹 서버 오류:', response.status, errorText);
-            
-            let errorMessage = '알 수 없는 오류';
-            try {
-                const error = JSON.parse(errorText);
-                errorMessage = error.message || error.error || errorText;
-            } catch {
-                errorMessage = errorText;
-            }
-            
-            showNotification('그룹 저장 실패: ' + errorMessage, 'danger');
+        const data = { name, description: document.getElementById('groupDescription').value };
+        const method = AppState.group.editing ? 'PUT' : 'POST';
+        const url = AppState.group.editing ? `/api/groups/${AppState.group.editing.id}` : '/api/groups';
+        const response = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+        if (!response.ok) {
+            const msg = await ErrorHandler.handleApiError(response, { 409: '동일한 이름의 그룹이 이미 존재합니다.' });
+            showNotification('그룹 저장 실패: ' + msg, 'danger');
+            return;
         }
-    } catch (error) {
-        console.error('그룹 저장 오류:', error);
-        showNotification('그룹 저장 중 오류: ' + error.message, 'danger');
+        await loadGroups();
+        AppState.group.modal.hide();
+        showNotification(AppState.group.editing ? '그룹이 수정되었습니다.' : '그룹이 추가되었습니다.', 'success');
+        AppState.group.editing = null;
+    } catch (e) {
+        console.error(e);
+        showNotification('네트워크 오류가 발생했습니다.', 'danger');
     } finally {
         saveButton.innerHTML = originalText;
         saveButton.disabled = false;
     }
 }
 
-// 그룹 수정
 function editGroup(groupId) {
-    editingGroup = groups.find(g => g.id === groupId);
-    if (!editingGroup) return;
-    
+    AppState.group.editing = AppState.group.list.find(g => g.id === groupId) || null;
+    if (!AppState.group.editing) return;
     document.getElementById('groupModalTitle').textContent = '프록시 그룹 수정';
-    document.getElementById('groupName').value = editingGroup.name;
-    document.getElementById('groupDescription').value = editingGroup.description || '';
-    
-    groupModal.show();
+    document.getElementById('groupName').value = AppState.group.editing.name;
+    document.getElementById('groupDescription').value = AppState.group.editing.description || '';
+    AppState.group.modal.show();
 }
 
-// 그룹 삭제
 async function deleteGroup(groupId) {
     const group = groups.find(g => g.id === groupId);
     if (!group) return;
@@ -833,26 +796,24 @@ async function saveProxy() {
     }
 }
 
-// 프록시 수정
 function editProxy(proxyId) {
-    editingProxy = proxies.find(p => p.id === proxyId);
-    if (!editingProxy) return;
-    
+    const proxy = (AppState.proxy.list || []).find(p => p.id === proxyId);
+    if (!proxy) return;
+    AppState.proxy.editing = proxy;
     document.getElementById('modalTitle').textContent = '프록시 수정';
-    document.getElementById('proxyName').value = editingProxy.name;
-    document.getElementById('proxyHost').value = editingProxy.host;
-    document.getElementById('proxySshPort').value = editingProxy.ssh_port;
-    document.getElementById('proxySnmpPort').value = editingProxy.snmp_port || 161;
-    document.getElementById('proxySnmpVersion').value = editingProxy.snmp_version || 'v2c';
-    document.getElementById('proxySnmpCommunity').value = editingProxy.snmp_community || 'public';
-    document.getElementById('proxyUsername').value = editingProxy.username;
-    document.getElementById('proxyPassword').value = ''; // 보안상 비워둠
-    document.getElementById('proxyDescription').value = editingProxy.description || '';
-    document.getElementById('proxyIsActive').checked = editingProxy.is_active;
-    document.getElementById('proxyIsMain').checked = editingProxy.is_main || false;
-    document.getElementById('proxyGroup').value = editingProxy.group_id || '';
-    
-    modal.show();
+    document.getElementById('proxyName').value = proxy.name;
+    document.getElementById('proxyHost').value = proxy.host;
+    document.getElementById('proxySshPort').value = proxy.ssh_port;
+    document.getElementById('proxySnmpPort').value = proxy.snmp_port || 161;
+    document.getElementById('proxySnmpVersion').value = proxy.snmp_version || 'v2c';
+    document.getElementById('proxySnmpCommunity').value = proxy.snmp_community || 'public';
+    document.getElementById('proxyUsername').value = proxy.username;
+    document.getElementById('proxyPassword').value = '';
+    document.getElementById('proxyDescription').value = proxy.description || '';
+    document.getElementById('proxyIsActive').checked = !!proxy.is_active;
+    document.getElementById('proxyIsMain').checked = !!proxy.is_main;
+    document.getElementById('proxyGroup').value = proxy.group_id || '';
+    AppState.proxy.modal.show();
 }
 
 // 프록시 삭제
@@ -1316,6 +1277,36 @@ function getIconForType(type) {
     }
 }
 
+/* Font Awesome 사용으로 SVG 대체 유틸은 미사용(보관) */
+function getIconSvgByFaClass(faClass) {
+    const map = {
+        'fa-edit': '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16"><path d="M12.854.146a.5.5 0 0 1 .11.54l-.057.07L14 1.5 2.854 12.646a.5.5 0 0 1-.168.11l-.09.029-3 1a.5.5 0 0 1-.63-.63l.029-.09 1-3a.5.5 0 0 1 .11-.168L10.5 1l.646.646L12.207.293l.07-.057a.5.5 0 0 1 .577-.09zM11.5 2.207 3 10.707V11h.293l8.5-8.5L11.5 2.207z"/></svg>',
+        'fa-trash': '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16"><path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5m2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5m3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0z"/><path d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4zM2.5 3h11V2h-11z"/></svg>',
+        'fa-plug': '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16"><path d="M6 2a1 1 0 0 1 1 1v3h2V3a1 1 0 1 1 2 0v3a2 2 0 0 1-2 2H8v2.5A3.5 3.5 0 0 1 4.5 14H3a1 1 0 1 1 0-2h1.5A1.5 1.5 0 0 0 6 10.5V8H5A2 2 0 0 1 3 6V3a1 1 0 1 1 2 0v3h1V3a1 1 0 0 1 1-1z"/></svg>',
+        'fa-spinner': '<svg class="spin" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" stroke="currentColor" stroke-width="2" fill="none" opacity="0.2"/><path d="M15 8a7 7 0 0 1-7 7" stroke="currentColor" stroke-width="2" fill="none"/></svg>'
+    };
+    return map[faClass] || '';
+}
+
+function replaceFaIcons(container) {
+    if (!container) return;
+    container.querySelectorAll('i.fas, i.fa').forEach(i => {
+        const classes = [...i.classList];
+        const faType = classes.find(c => c.startsWith('fa-') && c !== 'fa-spin');
+        const svg = getIconSvgByFaClass(faType || '');
+        if (svg) {
+            const span = document.createElement('span');
+            span.className = i.className.replace('fas', '').replace('fa', '').trim();
+            span.innerHTML = svg;
+            i.replaceWith(span);
+        }
+    });
+}
+
+const style = document.createElement('style');
+style.innerHTML = `.spin{animation:spin 1s linear infinite}@keyframes spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}`;
+document.head.appendChild(style);
+
 // ==================== 세션 브라우저 ====================
 function populateSessionProxySelect() {
     // 그룹 기반으로 수집하도록 변경되어 프록시 단일 선택은 보조로 유지하거나 미사용
@@ -1367,11 +1358,11 @@ async function loadSessions() {
             },
             columns: [
                 { title: 'ID', data: 0 },
-                { title: 'Proxy', data: 1 },
+                                 { title: '프록시 이름', data: 1 },
                 { title: 'Client IP', data: 2 },
                 { title: 'Server IP', data: 3 },
                 { title: 'User', data: 4 },
-                { title: 'URL Host', data: 5 },
+                                 { title: 'URL Host', data: 5, className: 'text-truncate', render: function(d){ return d || '-'; } },
                 { title: 'Category', data: 6 },
                 { 
                     title: 'Bytes Sent',
@@ -1406,16 +1397,15 @@ async function loadSessions() {
                 { targets: [0], visible: false, searchable: false }
             ],
             order: [[10, 'desc']], // 생성일시 기준 내림차순
-            pageLength: AppState.session.pagination.pageSize,
-            dom: 'Bfrtip',
+            pageLength: Math.min(AppState.session.pagination.pageSize, 50),
+            dom: "<'row align-items-center mb-2'<'col-sm-12 col-md-4'l><'col-sm-12 col-md-4 text-center'B><'col-sm-12 col-md-4'f>>"+
+                 "<'row'<'col-sm-12'tr>>"+
+                 "<'row mt-2'<'col-sm-12 col-md-6'i><'col-sm-12 col-md-6 d-flex justify-content-end'p>>",
             buttons: [
-                'copy',
-                'excel',
-                'csv',
-                {
-                    extend: 'colvis',
-                    text: '컬럼 설정'
-                }
+                { extend: 'copy', className: 'btn btn-sm btn-light' },
+                { extend: 'excel', className: 'btn btn-sm btn-light' },
+                { extend: 'csv', className: 'btn btn-sm btn-light' },
+                { extend: 'colvis', text: '컬럼 설정', className: 'btn btn-sm btn-light' }
             ],
             language: {
                 processing: "처리 중...",
@@ -1522,19 +1512,22 @@ function formatBytes(bytes) {
 function showSessionDetailModal(data) {
     const modalEl = document.getElementById('sessionDetailModal');
     if (!modalEl) return;
-    const lines = [];
-    const orderedKeys = [
-        'id','group_id','proxy_id','client_ip','server_ip','protocol','user','category',
-        'url_host','url','transaction','cust_id','user_name','client_side_mwg_ip','server_side_mwg_ip',
-        'cl_bytes_sent','cl_bytes_received','srv_bytes_sent','srv_bytes_received','age_seconds','in_use',
-        'creation_time','created_at'
-    ];
-    const keys = new Set(Object.keys(data));
-    // Primary fields first
-    orderedKeys.forEach(k => { if (keys.has(k)) { lines.push(`${k}: ${data[k] ?? ''}`); keys.delete(k); } });
-    // Remaining fields
-    Array.from(keys).sort().forEach(k => { lines.push(`${k}: ${data[k] ?? ''}`); });
-    document.getElementById('sessionDetailContent').textContent = lines.join('\n');
+    const container = document.getElementById('sessionDetailContent');
+    const important = ['proxy_name','client_ip','server_ip','protocol','user','category','url_host','created_at','age'];
+    const keys = new Set(Object.keys(data || {}));
+    const rows = [];
+    const pushRow = (k, v) => rows.push(`<tr><th>${k}</th><td>${v ?? ''}</td></tr>`);
+    important.forEach(k => { if (keys.has(k)) { pushRow(k, data[k]); keys.delete(k); } });
+    Array.from(keys).sort().forEach(k => pushRow(k, data[k]));
+    container.innerHTML = `
+        <div class="table-responsive">
+            <table class="table table-sm">
+                <tbody>
+                    ${rows.join('')}
+                </tbody>
+            </table>
+        </div>
+    `;
     const modal = new bootstrap.Modal(modalEl);
     modal.show();
 }
