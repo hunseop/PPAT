@@ -179,12 +179,23 @@ class MonitoringService:
                     return ''
                 return ip.split(':')[0]
 
+            def extract_host(url: str) -> str:
+                if not url:
+                    return ''
+                try:
+                    from urllib.parse import urlparse
+                    parsed = urlparse(url if '://' in url else f'//{url}', allow_fragments=True)
+                    host = parsed.hostname or ''
+                    return host
+                except Exception:
+                    return ''
+
             for s in info.get('sessions', []):
                 client_ip = strip_port(pick(s, ['Client IP', 'ClientIP', 'Client Address', 'Client']))
                 server_ip = strip_port(pick(s, ['Server IP', 'ServerIP', 'Server Address', 'Server']))
                 protocol = pick(s, ['Protocol', 'Proto'])
                 user = pick(s, ['User Name', 'User', 'Username', 'UserName'])
-                url = pick(s, ['URL', 'Uri', 'Request URL'])
+                url_full = pick(s, ['URL', 'Uri', 'Request URL'])
                 status = pick(s, ['Status', 'Age(seconds) Status', 'In use'])
 
                 rec = SessionRecord(
@@ -194,7 +205,6 @@ class MonitoringService:
                     server_ip=server_ip,
                     protocol=protocol,
                     user=user,
-                    policy=url,
                     category=status,
                     transaction=pick(s, ['Transaction']),
                     creation_time=to_dt(pick(s, ['Creation Time'])),
@@ -209,7 +219,8 @@ class MonitoringService:
                     trxn_index=to_int(pick(s, ['Trxn Index'])),
                     age_seconds=to_int(pick(s, ['Age(seconds)'])),
                     in_use=pick(s, ['In use']),
-                    url=pick(s, ['URL']),
+                    url=url_full,
+                    url_host=extract_host(url_full),
                     extra=None
                 )
                 db.session.add(rec)
@@ -272,6 +283,17 @@ class MonitoringService:
                 return ''
             return ip.split(':')[0]
 
+        def extract_host(url: str) -> str:
+            if not url:
+                return ''
+            try:
+                from urllib.parse import urlparse
+                parsed = urlparse(url if '://' in url else f'//{url}', allow_fragments=True)
+                host = parsed.hostname or ''
+                return host
+            except Exception:
+                return ''
+
         saved = 0
         from models import SessionRecord
         for s in info.get('sessions', []):
@@ -279,7 +301,7 @@ class MonitoringService:
             server_ip = strip_port(pick(s, ['Server IP', 'ServerIP', 'Server Address', 'Server']))
             protocol = pick(s, ['Protocol', 'Proto'])
             user = pick(s, ['User Name', 'User', 'Username', 'UserName'])
-            url = pick(s, ['URL', 'Uri', 'Request URL'])
+            url_full = pick(s, ['URL', 'Uri', 'Request URL'])
             status = pick(s, ['Status', 'Age(seconds) Status', 'In use'])
             rec = SessionRecord(
                 group_id=proxy.group_id,
@@ -288,7 +310,6 @@ class MonitoringService:
                 server_ip=server_ip,
                 protocol=protocol,
                 user=user,
-                policy=url,
                 category=status,
                 transaction=pick(s, ['Transaction']),
                 creation_time=to_dt(pick(s, ['Creation Time'])),
@@ -303,7 +324,8 @@ class MonitoringService:
                 trxn_index=to_int(pick(s, ['Trxn Index'])),
                 age_seconds=to_int(pick(s, ['Age(seconds)'])),
                 in_use=pick(s, ['In use']),
-                url=pick(s, ['URL']),
+                url=url_full,
+                url_host=extract_host(url_full),
                 extra=None
             )
             db.session.add(rec)
@@ -323,7 +345,8 @@ class MonitoringService:
                     SessionRecord.client_ip.ilike(like),
                     SessionRecord.server_ip.ilike(like),
                     SessionRecord.user.ilike(like),
-                    SessionRecord.policy.ilike(like),
+                    SessionRecord.url.ilike(like),
+                    SessionRecord.url_host.ilike(like),
                     SessionRecord.protocol.ilike(like),
                     SessionRecord.category.ilike(like)
                 )
@@ -358,7 +381,8 @@ class MonitoringService:
                     SessionRecord.client_ip.ilike(like),
                     SessionRecord.server_ip.ilike(like),
                     SessionRecord.user.ilike(like),
-                    SessionRecord.policy.ilike(like),
+                    SessionRecord.url.ilike(like),
+                    SessionRecord.url_host.ilike(like),
                     SessionRecord.protocol.ilike(like),
                     SessionRecord.category.ilike(like)
                 )
@@ -374,7 +398,7 @@ class MonitoringService:
         if user:
             query = query.filter(SessionRecord.user.ilike(f"%{user}%"))
         if url_contains:
-            query = query.filter(SessionRecord.policy.ilike(f"%{url_contains}%"))
+            query = query.filter(SessionRecord.url.ilike(f"%{url_contains}%"))
 
         total = query.count()
         if page < 1:

@@ -71,6 +71,41 @@ def create_app():
         
         db.session.commit()
 
+        # 경량 스키마 마이그레이션: url_host 컬럼 추가 및 백필
+        try:
+            insp = db.inspect(db.engine)
+            cols = [c['name'] for c in insp.get_columns('session_records')]
+            if 'url_host' not in cols:
+                db.session.execute(db.text('ALTER TABLE session_records ADD COLUMN url_host VARCHAR(255)'))
+                db.session.commit()
+            # 백필: policy -> url, 그리고 url_host 파생
+            from urllib.parse import urlparse
+            records = SessionRecord.query.all()
+            changed = 0
+            for r in records:
+                src_url = r.url or r.policy
+                host = None
+                if src_url:
+                    try:
+                        parsed = urlparse(src_url if '://' in src_url else f'//{src_url}', allow_fragments=True)
+                        host = parsed.hostname
+                    except Exception:
+                        host = None
+                updated = False
+                if (not r.url) and r.policy:
+                    r.url = r.policy
+                    updated = True
+                if (not r.url_host) and (host):
+                    r.url_host = host
+                    updated = True
+                if updated:
+                    changed += 1
+            if changed:
+                db.session.commit()
+        except Exception as e:
+            # 마이그레이션 오류는 무시하고 진행 (로그만 남김)
+            print(f"[WARN] schema migration skipped or failed: {e}")
+
     # 테스트 데이터 생성 엔드포인트
     @app.route('/api/test/generate_data', methods=['POST'])
     def generate_test_data():

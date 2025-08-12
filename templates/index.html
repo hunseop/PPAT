@@ -320,12 +320,12 @@
                                     <table id="sessionsTable" class="table table-hover table-sm mb-0" style="width:100%">
                                         <thead class="table-light">
                                             <tr>
+                                                <th style="display:none;">ID</th>
                                                 <th>Proxy</th>
                                                 <th>Client IP</th>
                                                 <th>Server IP</th>
-                                                <th>Protocol</th>
                                                 <th>User</th>
-                                                <th>Policy</th>
+                                                <th>URL Host</th>
                                                 <th>Category</th>
                                                 <th>Bytes Sent</th>
                                                 <th>Bytes Received</th>
@@ -334,7 +334,24 @@
                                             </tr>
                                         </thead>
                                     </table>
-                                </div>
+                                        
+                                        <!-- 세션 상세 모달 -->
+                                        <div class="modal fade" id="sessionDetailModal" tabindex="-1" aria-labelledby="sessionDetailModalLabel" aria-hidden="true">
+                                            <div class="modal-dialog modal-lg">
+                                                <div class="modal-content">
+                                                    <div class="modal-header border-0">
+                                                        <h5 class="modal-title" id="sessionDetailModalLabel">세션 상세</h5>
+                                                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                                    </div>
+                                                    <div class="modal-body">
+                                                        <div id="sessionDetailContent" class="small" style="white-space: pre-wrap; font-family: ui-monospace, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;"></div>
+                                                    </div>
+                                                    <div class="modal-footer border-0">
+                                                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">닫기</button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
                             </div>
                         </div>
                     </div>

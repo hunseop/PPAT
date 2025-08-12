@@ -1366,12 +1366,12 @@ async function loadSessions() {
                 }
             },
             columns: [
-                { title: 'Proxy', data: 0 },
-                { title: 'Client IP', data: 1 },
-                { title: 'Server IP', data: 2 },
-                { title: 'Protocol', data: 3 },
+                { title: 'ID', data: 0 },
+                { title: 'Proxy', data: 1 },
+                { title: 'Client IP', data: 2 },
+                { title: 'Server IP', data: 3 },
                 { title: 'User', data: 4 },
-                { title: 'Policy', data: 5 },
+                { title: 'URL Host', data: 5 },
                 { title: 'Category', data: 6 },
                 { 
                     title: 'Bytes Sent',
@@ -1401,6 +1401,9 @@ async function loadSessions() {
                         return data ? new Date(data).toLocaleString() : '-';
                     }
                 }
+            ],
+            columnDefs: [
+                { targets: [0], visible: false, searchable: false }
             ],
             order: [[10, 'desc']], // 생성일시 기준 내림차순
             pageLength: AppState.session.pagination.pageSize,
@@ -1435,6 +1438,26 @@ async function loadSessions() {
             responsive: true
         });
 
+        // 행 클릭 시 상세 보기
+        $('#sessionsTable tbody').off('click').on('click', 'tr', async function() {
+            const table = $('#sessionsTable').DataTable();
+            const rowData = table.row(this).data();
+            if (!rowData) return;
+            const id = rowData[0];
+            try {
+                const res = await fetch(`/api/monitoring/sessions/${id}`);
+                const json = await res.json();
+                if (json && json.success) {
+                    showSessionDetailModal(json.data);
+                } else {
+                    showNotification('상세 정보를 불러오지 못했습니다.', 'danger');
+                }
+            } catch (e) {
+                console.error(e);
+                showNotification('상세 조회 중 오류가 발생했습니다.', 'danger');
+            }
+        });
+
     } catch (e) {
         console.error('세션 로드 오류:', e);
         showNotification('세션 로드 중 오류가 발생했습니다.', 'danger');
@@ -1448,6 +1471,26 @@ function formatBytes(bytes) {
     const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
+
+function showSessionDetailModal(data) {
+    const modalEl = document.getElementById('sessionDetailModal');
+    if (!modalEl) return;
+    const lines = [];
+    const orderedKeys = [
+        'id','group_id','proxy_id','client_ip','server_ip','protocol','user','category',
+        'url_host','url','transaction','cust_id','user_name','client_side_mwg_ip','server_side_mwg_ip',
+        'cl_bytes_sent','cl_bytes_received','srv_bytes_sent','srv_bytes_received','age_seconds','in_use',
+        'creation_time','created_at'
+    ];
+    const keys = new Set(Object.keys(data));
+    // Primary fields first
+    orderedKeys.forEach(k => { if (keys.has(k)) { lines.push(`${k}: ${data[k] ?? ''}`); keys.delete(k); } });
+    // Remaining fields
+    Array.from(keys).sort().forEach(k => { lines.push(`${k}: ${data[k] ?? ''}`); });
+    document.getElementById('sessionDetailContent').textContent = lines.join('\n');
+    const modal = new bootstrap.Modal(modalEl);
+    modal.show();
 }
 
 // 시간 간격 포맷팅
