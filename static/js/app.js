@@ -469,113 +469,66 @@ function updateGroupSelect() {
     });
 }
 
-// 그룹 모달 표시
 function showGroupModal() {
     console.log('그룹 모달 표시');
-    editingGroup = null;
+    AppState.group.editing = null;
     document.getElementById('groupModalTitle').textContent = '프록시 그룹 추가';
     clearGroupForm();
-    groupModal.show();
+    AppState.group.modal.show();
 }
 
-// 그룹 모달 닫기
 function closeGroupModal() {
     console.log('그룹 모달 닫기');
-    groupModal.hide();
-    editingGroup = null;
+    AppState.group.modal.hide();
+    AppState.group.editing = null;
     clearGroupForm();
 }
 
-// 그룹 폼 초기화
 function clearGroupForm() {
     document.getElementById('groupName').value = '';
     document.getElementById('groupDescription').value = '';
 }
 
-// 그룹 저장
 async function saveGroup() {
     console.log('그룹 저장 시작');
     const name = document.getElementById('groupName').value.trim();
-    
-    console.log('그룹 입력값:', { name });
-    
-    if (!name) {
-        showNotification('그룹 이름은 필수 항목입니다.', 'warning');
-        return;
-    }
-    
+    if (!name) { showNotification('그룹 이름은 필수 항목입니다.', 'warning'); return; }
     const saveButton = document.getElementById('saveGroupButton');
     const originalText = saveButton.innerHTML;
     saveButton.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>저장중...';
     saveButton.disabled = true;
-    
     try {
-        const data = {
-            name: name,
-            description: document.getElementById('groupDescription').value
-        };
-        
-        const method = editingGroup ? 'PUT' : 'POST';
-        const url = editingGroup ? `/api/groups/${editingGroup.id}` : '/api/groups';
-        
-        console.log('그룹 요청 데이터:', data);
-        console.log('그룹 요청 URL:', url, 'Method:', method);
-        
-        const response = await fetch(url, {
-            method: method,
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(data)
-        });
-        
-        console.log('그룹 응답 상태:', response.status);
-        
-        if (response.ok) {
-            const result = await response.json();
-            console.log('그룹 저장 성공:', result);
-            await loadGroups();
-            closeGroupModal();
-            showNotification(
-                editingGroup ? '그룹이 수정되었습니다.' : '그룹이 추가되었습니다.', 
-                'success'
-            );
-        } else {
-            const errorText = await response.text();
-            console.error('그룹 서버 오류:', response.status, errorText);
-            
-            let errorMessage = '알 수 없는 오류';
-            try {
-                const error = JSON.parse(errorText);
-                errorMessage = error.message || error.error || errorText;
-            } catch {
-                errorMessage = errorText;
-            }
-            
-            showNotification('그룹 저장 실패: ' + errorMessage, 'danger');
+        const data = { name, description: document.getElementById('groupDescription').value };
+        const method = AppState.group.editing ? 'PUT' : 'POST';
+        const url = AppState.group.editing ? `/api/groups/${AppState.group.editing.id}` : '/api/groups';
+        const response = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+        if (!response.ok) {
+            const msg = await ErrorHandler.handleApiError(response, { 409: '동일한 이름의 그룹이 이미 존재합니다.' });
+            showNotification('그룹 저장 실패: ' + msg, 'danger');
+            return;
         }
-    } catch (error) {
-        console.error('그룹 저장 오류:', error);
-        showNotification('그룹 저장 중 오류: ' + error.message, 'danger');
+        await loadGroups();
+        AppState.group.modal.hide();
+        showNotification(AppState.group.editing ? '그룹이 수정되었습니다.' : '그룹이 추가되었습니다.', 'success');
+        AppState.group.editing = null;
+    } catch (e) {
+        console.error(e);
+        showNotification('네트워크 오류가 발생했습니다.', 'danger');
     } finally {
         saveButton.innerHTML = originalText;
         saveButton.disabled = false;
     }
 }
 
-// 그룹 수정
 function editGroup(groupId) {
-    editingGroup = groups.find(g => g.id === groupId);
-    if (!editingGroup) return;
-    
+    AppState.group.editing = AppState.group.list.find(g => g.id === groupId) || null;
+    if (!AppState.group.editing) return;
     document.getElementById('groupModalTitle').textContent = '프록시 그룹 수정';
-    document.getElementById('groupName').value = editingGroup.name;
-    document.getElementById('groupDescription').value = editingGroup.description || '';
-    
-    groupModal.show();
+    document.getElementById('groupName').value = AppState.group.editing.name;
+    document.getElementById('groupDescription').value = AppState.group.editing.description || '';
+    AppState.group.modal.show();
 }
 
-// 그룹 삭제
 async function deleteGroup(groupId) {
     const group = groups.find(g => g.id === groupId);
     if (!group) return;
@@ -843,26 +796,24 @@ async function saveProxy() {
     }
 }
 
-// 프록시 수정
 function editProxy(proxyId) {
-    editingProxy = proxies.find(p => p.id === proxyId);
-    if (!editingProxy) return;
-    
+    const proxy = (AppState.proxy.list || []).find(p => p.id === proxyId);
+    if (!proxy) return;
+    AppState.proxy.editing = proxy;
     document.getElementById('modalTitle').textContent = '프록시 수정';
-    document.getElementById('proxyName').value = editingProxy.name;
-    document.getElementById('proxyHost').value = editingProxy.host;
-    document.getElementById('proxySshPort').value = editingProxy.ssh_port;
-    document.getElementById('proxySnmpPort').value = editingProxy.snmp_port || 161;
-    document.getElementById('proxySnmpVersion').value = editingProxy.snmp_version || 'v2c';
-    document.getElementById('proxySnmpCommunity').value = editingProxy.snmp_community || 'public';
-    document.getElementById('proxyUsername').value = editingProxy.username;
-    document.getElementById('proxyPassword').value = ''; // 보안상 비워둠
-    document.getElementById('proxyDescription').value = editingProxy.description || '';
-    document.getElementById('proxyIsActive').checked = editingProxy.is_active;
-    document.getElementById('proxyIsMain').checked = editingProxy.is_main || false;
-    document.getElementById('proxyGroup').value = editingProxy.group_id || '';
-    
-    modal.show();
+    document.getElementById('proxyName').value = proxy.name;
+    document.getElementById('proxyHost').value = proxy.host;
+    document.getElementById('proxySshPort').value = proxy.ssh_port;
+    document.getElementById('proxySnmpPort').value = proxy.snmp_port || 161;
+    document.getElementById('proxySnmpVersion').value = proxy.snmp_version || 'v2c';
+    document.getElementById('proxySnmpCommunity').value = proxy.snmp_community || 'public';
+    document.getElementById('proxyUsername').value = proxy.username;
+    document.getElementById('proxyPassword').value = '';
+    document.getElementById('proxyDescription').value = proxy.description || '';
+    document.getElementById('proxyIsActive').checked = !!proxy.is_active;
+    document.getElementById('proxyIsMain').checked = !!proxy.is_main;
+    document.getElementById('proxyGroup').value = proxy.group_id || '';
+    AppState.proxy.modal.show();
 }
 
 // 프록시 삭제
@@ -1407,11 +1358,11 @@ async function loadSessions() {
             },
             columns: [
                 { title: 'ID', data: 0 },
-                { title: 'Proxy', data: 1 },
+                                 { title: '프록시 이름', data: 1 },
                 { title: 'Client IP', data: 2 },
                 { title: 'Server IP', data: 3 },
                 { title: 'User', data: 4 },
-                { title: 'URL Host', data: 5 },
+                                 { title: 'URL Host', data: 5, className: 'text-truncate', render: function(d){ return d || '-'; } },
                 { title: 'Category', data: 6 },
                 { 
                     title: 'Bytes Sent',
@@ -1561,19 +1512,22 @@ function formatBytes(bytes) {
 function showSessionDetailModal(data) {
     const modalEl = document.getElementById('sessionDetailModal');
     if (!modalEl) return;
-    const lines = [];
-    const orderedKeys = [
-        'id','group_id','proxy_id','client_ip','server_ip','protocol','user','category',
-        'url_host','url','transaction','cust_id','user_name','client_side_mwg_ip','server_side_mwg_ip',
-        'cl_bytes_sent','cl_bytes_received','srv_bytes_sent','srv_bytes_received','age_seconds','in_use',
-        'creation_time','created_at'
-    ];
-    const keys = new Set(Object.keys(data));
-    // Primary fields first
-    orderedKeys.forEach(k => { if (keys.has(k)) { lines.push(`${k}: ${data[k] ?? ''}`); keys.delete(k); } });
-    // Remaining fields
-    Array.from(keys).sort().forEach(k => { lines.push(`${k}: ${data[k] ?? ''}`); });
-    document.getElementById('sessionDetailContent').textContent = lines.join('\n');
+    const container = document.getElementById('sessionDetailContent');
+    const important = ['proxy_name','client_ip','server_ip','protocol','user','category','url_host','created_at','age'];
+    const keys = new Set(Object.keys(data || {}));
+    const rows = [];
+    const pushRow = (k, v) => rows.push(`<tr><th>${k}</th><td>${v ?? ''}</td></tr>`);
+    important.forEach(k => { if (keys.has(k)) { pushRow(k, data[k]); keys.delete(k); } });
+    Array.from(keys).sort().forEach(k => pushRow(k, data[k]));
+    container.innerHTML = `
+        <div class="table-responsive">
+            <table class="table table-sm">
+                <tbody>
+                    ${rows.join('')}
+                </tbody>
+            </table>
+        </div>
+    `;
     const modal = new bootstrap.Modal(modalEl);
     modal.show();
 }

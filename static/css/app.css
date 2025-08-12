@@ -156,3 +156,13 @@ div.dataTables_wrapper div.dataTables_paginate { float: right; margin-top: 0; }
 #monitoringInterval { max-width: 140px; }
 #monitoringStatus { padding: 0.25rem 0.5rem; font-size: 0.75rem; }
 #sessionsTab .card-header .btn { height: 30px; padding: 0 10px; }
+
+/* Tone down colorful text in resources */
+#resourcesTab .card .card-title.text-primary { color: #2563eb !important; }
+#resourcesTab .card .card-title.text-success { color: #16a34a !important; }
+#resourcesTab .card .card-title.text-secondary { color: #475569 !important; }
+#resourcesTab .badge, #resourcesTab .text-primary, #resourcesTab .text-success { filter: saturate(0.9); }
+
+/* Monitoring row: allocate more space to control buttons */
+#resourcesTab .card .row.align-items-center > .col-md-6 { flex: 0 0 auto; width: 45%; }
+#resourcesTab .card .row.align-items-center > .col-md-3.text-end { flex: 0 0 auto; width: 35%; }
