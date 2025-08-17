@@ -328,17 +328,106 @@
                     <div class="col-12">
                         <div class="card shadow-sm">
                             <div class="card-header bg-white">
-                                <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+                                <div class="d-flex align-items-center justify-content-between mb-3">
                                     <h5 class="mb-0 text-muted">세션 브라우저</h5>
-                                    <div class="d-flex align-items-center gap-2 flex-wrap">
-                                        <select id="sessionGroupSelect" class="form-select form-select-sm"></select>
-                                        <select id="sessionProxySelect" class="form-select form-select-sm"></select>
-                                        <button class="btn btn-sm btn-outline-primary" onclick="fetchSessionsFromSource()"><i class="fas fa-download me-1"></i>가져오기</button>
+                                    <div id="sessionLoadingStatus" class="loading-spinner" style="display: none;">
+                                        <i class="fas fa-spinner"></i>
+                                        <span>세션 정보 로딩 중...</span>
+                                    </div>
+                                </div>
+                                <!-- 세션 조회 컨트롤 -->
+                                <div class="session-query-card mb-4">
+                                    <div class="card shadow-sm">
+                                        <div class="card-body">
+                                            <div class="row g-3">
+                                                <div class="col-md-5">
+                                                    <label for="sessionGroupSelect" class="form-label d-flex align-items-center">
+                                                        <i class="fas fa-layer-group me-2 text-muted"></i>
+                                                        <span>프록시 그룹</span>
+                                                        <span class="text-danger ms-1">*</span>
+                                                    </label>
+                                                    <select id="sessionGroupSelect" class="form-select" data-placeholder="그룹을 선택하세요">
+                                                        <option value="">그룹을 선택하세요</option>
+                                                    </select>
+                                                    <!-- <div class="form-text text-muted small">
+                                                        <i class="fas fa-info-circle me-1"></i>먼저 프록시 그룹을 선택해주세요
+                                                    </div> -->
+                                                </div>
+                                                <div class="col-md-5">
+                                                    <label for="sessionProxySelect" class="form-label d-flex align-items-center">
+                                                        <i class="fas fa-server me-2 text-muted"></i>
+                                                        <span>프록시 서버</span>
+                                                    </label>
+                                                    <select id="sessionProxySelect" class="form-select" data-placeholder="서버를 선택하세요">
+                                                        <option value="">전체 서버</option>
+                                                    </select>
+                                                    <!-- <div class="form-text text-muted small">
+                                                        <i class="fas fa-info-circle me-1"></i>선택 안함 시 그룹 내 모든 서버 조회
+                                                    </div> -->
+                                                </div>
+                                                <div class="col-md-2 d-flex align-items-center">
+                                                    <button class="btn btn-primary w-100" id="fetchSessionsBtn" onclick="fetchSessionsFromSource()">
+                                                        <i class="fas fa-sync-alt me-1"></i>세션 가져오기
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
                             <div class="card-body p-0">
-                                <div class="table-responsive">
+                                <!-- 초기 안내 메시지 -->
+                                <div id="sessionsInitialState" class="sessions-empty-state">
+                                    <div class="icon">
+                                        <i class="fas fa-info-circle fa-3x"></i>
+                                    </div>
+                                    <h6 class="title">세션 정보를 조회하려면</h6>
+                                    <p class="description">프록시 그룹을 선택하고 '세션 가져오기' 버튼을 클릭하세요.</p>
+                                </div>
+                                
+                                <!-- 세션 테이블 -->
+                                <div id="sessionsTableContainer" class="table-responsive" style="display: none;">
+                                    <div class="sessions-table-controls p-3 border-bottom">
+                                        <div class="d-flex flex-wrap gap-3">
+                                            <!-- 왼쪽 컨트롤 -->
+                                            <div class="d-flex align-items-center gap-2">
+                                                <div class="page-size-selector">
+                                                    <label class="form-label small mb-0">페이지당 표시</label>
+                                                    <select id="sessionPageSize" class="form-select form-select-sm" onchange="updatePageSize(this.value)">
+                                                        <option value="10">10개</option>
+                                                        <option value="25" selected>25개</option>
+                                                        <option value="50">50개</option>
+                                                        <option value="100">100개</option>
+                                                    </select>
+                                                </div>
+                                                <button class="btn btn-outline-secondary btn-sm" onclick="toggleColumnSettings()">
+                                                    <i class="fas fa-columns me-1"></i>컬럼 설정
+                                                </button>
+                                            </div>
+                                            
+                                            <!-- 중앙 검색 -->
+                                            <div class="search-box flex-grow-1">
+                                                <div class="input-group">
+                                                    <span class="input-group-text bg-transparent border-end-0">
+                                                        <i class="fas fa-search text-muted"></i>
+                                                    </span>
+                                                    <input type="search" id="sessionSearch" class="form-control border-start-0" placeholder="검색어를 입력하세요...">
+                                                </div>
+                                            </div>
+                                            
+                                            <!-- 오른쪽 내보내기 -->
+                                            <div class="d-flex align-items-center gap-2">
+                                                <div class="btn-group">
+                                                    <button class="btn btn-outline-secondary btn-sm" onclick="exportSessions('excel')">
+                                                        <i class="fas fa-file-excel me-1"></i>Excel
+                                                    </button>
+                                                    <button class="btn btn-outline-secondary btn-sm" onclick="exportSessions('csv')">
+                                                        <i class="fas fa-file-csv me-1"></i>CSV
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
                                     <table id="sessionsTable" class="table table-hover table-sm mb-0" style="width:100%">
                                         <thead class="table-light">
                                             <tr>
@@ -356,24 +445,107 @@
                                             </tr>
                                         </thead>
                                     </table>
-                                        
-                                        <!-- 세션 상세 모달 -->
-                                        <div class="modal fade" id="sessionDetailModal" tabindex="-1" aria-labelledby="sessionDetailModalLabel" aria-hidden="true">
-                                            <div class="modal-dialog modal-lg">
-                                                <div class="modal-content">
-                                                    <div class="modal-header border-0">
-                                                        <h5 class="modal-title" id="sessionDetailModalLabel">세션 상세</h5>
-                                                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                                                    </div>
-                                                    <div class="modal-body">
-                                                        <div id="sessionDetailContent" class="small" style="white-space: pre-wrap; font-family: ui-monospace, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;"></div>
-                                                    </div>
-                                                    <div class="modal-footer border-0">
-                                                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">닫기</button>
-                                                    </div>
-                                                </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 세션 상세 모달 -->
+                <div class="modal fade" id="sessionDetailModal" tabindex="-1" aria-labelledby="sessionDetailModalLabel" aria-hidden="true">
+                    <div class="modal-dialog modal-lg">
+                        <div class="modal-content">
+                            <div class="modal-header border-0">
+                                <div>
+                                    <h5 class="modal-title mb-1" id="sessionDetailModalLabel">세션 상세 정보</h5>
+                                    <p class="text-muted mb-0" id="sessionDetailSubtitle"></p>
+                                </div>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                            </div>
+                            <div class="modal-body">
+                                <!-- 로딩 상태 -->
+                                <div id="sessionDetailLoading" class="text-center py-5" style="display: none;">
+                                    <div class="loading-spinner d-inline-flex">
+                                        <i class="fas fa-spinner"></i>
+                                        <span>세션 정보를 불러오는 중...</span>
+                                    </div>
+                                </div>
+                                
+                                <!-- 에러 상태 -->
+                                <div id="sessionDetailError" class="sessions-empty-state" style="display: none;">
+                                    <div class="icon">
+                                        <i class="fas fa-exclamation-circle fa-3x"></i>
+                                    </div>
+                                    <h6 class="title">세션 정보를 불러올 수 없습니다</h6>
+                                    <p class="description" id="sessionDetailErrorMessage">
+                                        잠시 후 다시 시도해주세요.
+                                    </p>
+                                    <button class="btn btn-outline-primary" onclick="retryLoadSessionDetail()">
+                                        <i class="fas fa-sync-alt me-1"></i>다시 시도
+                                    </button>
+                                </div>
+                                
+                                <!-- 세션 정보 -->
+                                <div id="sessionDetailContent" class="session-detail" style="display: none;">
+                                    <!-- 기본 정보 -->
+                                    <div class="session-detail-card">
+                                        <div class="card-header">
+                                            <i class="fas fa-info-circle me-2"></i>기본 정보
+                                        </div>
+                                        <div class="card-body" id="sessionBasicInfo">
+                                            <div class="placeholder-glow">
+                                                <span class="placeholder col-6"></span>
+                                                <span class="placeholder col-4"></span>
+                                                <span class="placeholder col-8"></span>
                                             </div>
                                         </div>
+                                    </div>
+                                    
+                                    <!-- 연결 정보 -->
+                                    <div class="session-detail-card">
+                                        <div class="card-header">
+                                            <i class="fas fa-network-wired me-2"></i>연결 정보
+                                        </div>
+                                        <div class="card-body" id="sessionConnectionInfo">
+                                            <div class="placeholder-glow">
+                                                <span class="placeholder col-8"></span>
+                                                <span class="placeholder col-6"></span>
+                                                <span class="placeholder col-4"></span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- 트래픽 정보 -->
+                                    <div class="session-detail-card">
+                                        <div class="card-header">
+                                            <i class="fas fa-chart-bar me-2"></i>트래픽 정보
+                                        </div>
+                                        <div class="card-body" id="sessionTrafficInfo">
+                                            <div class="placeholder-glow">
+                                                <span class="placeholder col-4"></span>
+                                                <span class="placeholder col-6"></span>
+                                                <span class="placeholder col-8"></span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- 추가 정보 -->
+                                    <div class="session-detail-card">
+                                        <div class="card-header">
+                                            <i class="fas fa-clipboard-list me-2"></i>추가 정보
+                                        </div>
+                                        <div class="card-body" id="sessionAdditionalInfo">
+                                            <div class="placeholder-glow">
+                                                <span class="placeholder col-6"></span>
+                                                <span class="placeholder col-8"></span>
+                                                <span class="placeholder col-4"></span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="modal-footer border-0">
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">닫기</button>
                             </div>
                         </div>
                     </div>

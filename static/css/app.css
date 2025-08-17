@@ -291,9 +291,456 @@ body {
 .resources-table th.col-status { width: 10%; }
 .resources-table th.col-update { width: 12%; }
 
-/* Sessions header controls */
-#sessionsTab .card-header .d-flex select { min-width: 220px; }
-#sessionsTab .card-header .btn { height: 32px; padding: 0 12px; border-radius: 8px; }
+/* Sessions Browser Styles */
+/* 세션 조회 카드 스타일 */
+.session-query-card .card {
+    border: 1px solid var(--border);
+    background: #fff;
+}
+
+.session-query-card .card-body {
+    padding: 1.25rem;
+}
+
+.session-query-card .form-label {
+    font-weight: 500;
+    margin-bottom: 0.5rem;
+    color: var(--text);
+    font-size: 0.9rem;
+}
+
+.session-query-card .form-label i {
+    font-size: 0.9rem;
+    width: 1.5rem;
+    text-align: center;
+}
+
+.session-query-card .form-select {
+    border-color: var(--border);
+    background-color: #fff;
+    transition: all 0.2s;
+    height: 38px;
+    padding: 0.375rem 2.25rem 0.375rem 0.75rem;
+    font-size: 0.9rem;
+}
+
+.session-query-card .form-select:hover {
+    border-color: var(--primary);
+}
+
+.session-query-card .form-select:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 0.2rem rgba(59, 130, 246, 0.15);
+}
+
+.session-query-card .form-select[data-placeholder]:not(:focus):first-child {
+    color: var(--muted);
+}
+
+.session-query-card .form-text {
+    margin-top: 0.35rem;
+    font-size: 0.8rem;
+}
+
+.session-query-card .form-text i {
+    font-size: 0.8rem;
+}
+
+.session-query-card .btn {
+    height: 38px;
+    padding: 0.375rem 0.75rem;
+    font-size: 0.9rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    margin-top: 24px; /* form-label + select + form-text와 동일한 높이에 맞추기 위한 여백 */
+}
+
+.session-query-card .btn i {
+    font-size: 0.9rem;
+}
+
+/* 반응형 조정 */
+@media (max-width: 768px) {
+    .session-query-card .card-body {
+        padding: 1rem;
+    }
+    
+    .session-query-card .btn-lg {
+        margin-top: 1rem;
+        height: auto;
+    }
+}
+
+.sessions-table-controls {
+    background: #f8fafc;
+}
+
+/* 페이지 크기 선택기 */
+.page-size-selector {
+    min-width: 100px;
+}
+
+.page-size-selector .form-label {
+    color: var(--muted);
+}
+
+.page-size-selector .form-select {
+    min-width: 80px;
+}
+
+/* 검색 박스 */
+.search-box .input-group {
+    box-shadow: var(--shadow-sm);
+    border-radius: 8px;
+    overflow: hidden;
+    max-width: 400px;
+    margin: 0 auto;
+}
+
+.search-box .input-group-text,
+.search-box .form-control {
+    border-color: var(--border);
+}
+
+.search-box .form-control:focus {
+    border-color: var(--primary);
+    box-shadow: none;
+}
+
+/* 테이블 컨트롤 버튼 */
+.sessions-table-controls .btn-outline-secondary {
+    background: white;
+    border-color: var(--border);
+    color: var(--text);
+}
+
+.sessions-table-controls .btn-outline-secondary:hover {
+    background: #f8fafc;
+    border-color: var(--border);
+    color: var(--primary);
+}
+
+.sessions-table-controls .btn-group {
+    box-shadow: var(--shadow-sm);
+}
+
+/* 반응형 조정 */
+@media (max-width: 768px) {
+    .sessions-table-controls .d-flex {
+        justify-content: space-between;
+    }
+    
+    .search-box {
+        order: -1;
+        width: 100%;
+    }
+    
+    .search-box .input-group {
+        max-width: none;
+    }
+}
+
+/* DataTable Customization */
+.dataTables_wrapper .dataTables_length,
+.dataTables_wrapper .dataTables_filter {
+    display: none !important;
+}
+
+.dataTables_wrapper .dataTables_info {
+    padding: 1rem;
+    color: var(--muted);
+    font-size: 0.875rem;
+}
+
+.dataTables_wrapper .dataTables_paginate {
+    padding: 1rem;
+}
+
+.dataTables_wrapper .dataTables_paginate .paginate_button {
+    margin: 0 2px;
+    border: none !important;
+    background: transparent !important;
+    padding: 0.375rem 0.75rem !important;
+    border-radius: 6px;
+}
+
+.dataTables_wrapper .dataTables_paginate .paginate_button:hover {
+    background: #f1f5f9 !important;
+    color: var(--text) !important;
+}
+
+.dataTables_wrapper .dataTables_paginate .paginate_button.current {
+    background: var(--primary) !important;
+    color: white !important;
+}
+
+.dataTables_wrapper .dataTables_paginate .paginate_button.disabled {
+    color: var(--muted) !important;
+    opacity: 0.5;
+}
+
+/* Empty States */
+.sessions-empty-state {
+    text-align: center;
+    padding: 4rem 2rem;
+    background: #f8fafc;
+}
+
+.sessions-empty-state .icon {
+    color: var(--muted);
+    margin-bottom: 1.5rem;
+}
+
+.sessions-empty-state .title {
+    color: var(--text);
+    font-size: 1.125rem;
+    margin-bottom: 0.5rem;
+}
+
+.sessions-empty-state .description {
+    color: var(--muted);
+    margin-bottom: 1.5rem;
+    max-width: 400px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+/* Loading States */
+.loading-spinner {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    background: #f8fafc;
+    border-radius: 8px;
+    color: var(--muted);
+    font-size: 0.875rem;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .sessions-selector-group {
+        flex-direction: column;
+        width: 100%;
+    }
+    
+    .sessions-selector {
+        width: 100%;
+    }
+    
+    .sessions-actions {
+        width: 100%;
+        justify-content: flex-end;
+    }
+    
+    .sessions-table-controls .d-flex {
+        flex-direction: column;
+        gap: 1rem;
+    }
+    
+    .page-size-selector,
+    .search-box {
+        width: 100%;
+    }
+}
+
+/* Session Detail Modal */
+.session-detail {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 1.5rem;
+}
+
+.session-detail-card {
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.session-detail-card .card-header {
+    background: #f8fafc;
+    padding: 0.75rem 1rem;
+    font-weight: 500;
+    color: var(--text);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+}
+
+.session-detail-card .card-header i {
+    color: var(--muted);
+}
+
+.session-detail-card .card-body {
+    padding: 1rem;
+}
+
+.session-detail-card .info-item {
+    display: flex;
+    align-items: flex-start;
+    margin-bottom: 0.75rem;
+}
+
+.session-detail-card .info-item:last-child {
+    margin-bottom: 0;
+}
+
+.session-detail-card .info-label {
+    color: var(--muted);
+    font-size: 0.875rem;
+    min-width: 120px;
+    padding-right: 1rem;
+}
+
+.session-detail-card .info-value {
+    color: var(--text);
+    word-break: break-all;
+}
+
+.session-detail-card .placeholder-glow {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.session-detail-card .placeholder {
+    height: 1rem;
+    background-color: #e5e7eb;
+    border-radius: 4px;
+}
+
+#sessionDetailSubtitle {
+    font-size: 0.875rem;
+}
+
+/* Session Detail States */
+#sessionDetailLoading,
+#sessionDetailError {
+    min-height: 300px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+#sessionDetailError .sessions-empty-state {
+    background: transparent;
+    padding: 2rem;
+}
+
+/* DataTables Custom Styles */
+.dataTables_wrapper .dt-buttons {
+    margin-bottom: 1rem;
+    display: flex;
+    gap: 0.5rem;
+}
+
+.dataTables_wrapper .dataTables_filter {
+    margin-bottom: 1rem;
+}
+
+.dataTables_wrapper .dataTables_filter input {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.375rem 0.75rem;
+    width: 300px;
+}
+
+.dataTables_wrapper .dataTables_length select {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.375rem 2rem 0.375rem 0.75rem;
+}
+
+.dataTables_wrapper .dataTables_info {
+    color: var(--muted);
+    font-size: 0.875rem;
+}
+
+.dataTables_wrapper .dataTables_paginate .paginate_button {
+    padding: 0.375rem 0.75rem;
+    margin: 0 2px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+}
+
+.dataTables_wrapper .dataTables_paginate .paginate_button.current {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: white !important;
+}
+
+.dataTables_wrapper .dataTables_paginate .paginate_button:hover {
+    background: #f1f5f9;
+    border-color: var(--border);
+}
+
+/* Empty State for Sessions */
+.sessions-empty-state {
+    text-align: center;
+    padding: 3rem 1rem;
+    background: #f8fafc;
+    border-radius: 8px;
+}
+
+.sessions-empty-state .icon {
+    color: var(--muted);
+    margin-bottom: 1rem;
+}
+
+.sessions-empty-state .title {
+    color: var(--text);
+    margin-bottom: 0.5rem;
+}
+
+.sessions-empty-state .description {
+    color: var(--muted);
+    margin-bottom: 1.5rem;
+}
+
+/* Loading Spinner */
+.loading-spinner {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--muted);
+}
+
+.loading-spinner i {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+/* Responsive Adjustments */
+@media (max-width: 768px) {
+    .sessions-controls {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .sessions-selector {
+        width: 100%;
+    }
+    
+    .sessions-actions {
+        justify-content: flex-end;
+        width: 100%;
+    }
+    
+    .dataTables_wrapper .dataTables_filter input {
+        width: 100%;
+    }
+    
+    .session-detail {
+        grid-template-columns: 1fr;
+    }
+}
 
 /* Unify DataTables buttons appearance */
 .dt-buttons .btn, .dt-buttons .btn.btn-secondary {

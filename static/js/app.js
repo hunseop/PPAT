@@ -417,7 +417,9 @@ async function loadGroups() {
         console.log('Groups response status:', response.status);
         
         if (response.ok) {
-            groups = await response.json();
+            const data = await response.json();
+            groups = data; // 전역 변수 업데이트
+            AppState.group.list = data; // AppState도 동기화
             console.log('로드된 그룹 수:', groups.length);
             updateGroupTable();
             updateGroupSelect();
@@ -541,11 +543,16 @@ async function saveGroup() {
 }
 
 function editGroup(groupId) {
-    AppState.group.editing = AppState.group.list.find(g => g.id === groupId) || null;
-    if (!AppState.group.editing) return;
+    const group = groups.find(g => g.id === groupId);
+    if (!group) {
+        console.error('그룹을 찾을 수 없습니다:', groupId);
+        return;
+    }
+    
+    AppState.group.editing = group;
     document.getElementById('groupModalTitle').textContent = '프록시 그룹 수정';
-    document.getElementById('groupName').value = AppState.group.editing.name;
-    document.getElementById('groupDescription').value = AppState.group.editing.description || '';
+    document.getElementById('groupName').value = group.name;
+    document.getElementById('groupDescription').value = group.description || '';
     AppState.group.modal.show();
 }
 
@@ -591,9 +598,17 @@ async function loadProxies() {
         console.log('Proxies response status:', response.status);
         
         if (response.ok) {
-            proxies = await response.json();
+            const data = await response.json();
+            proxies = data; // 전역 변수 업데이트
+            AppState.proxy.list = data; // AppState도 동기화
             console.log('로드된 프록시 수:', proxies.length);
             updateProxyTable();
+            
+            // 세션 브라우저의 프록시 선택기도 업데이트
+            const sessionProxySelect = document.getElementById('sessionProxySelect');
+            if (sessionProxySelect) {
+                populateSessionProxySelect();
+            }
         } else {
             const errorText = await response.text();
             console.error('프록시 API 오류:', response.status, errorText);
@@ -817,22 +832,41 @@ async function saveProxy() {
 }
 
 function editProxy(proxyId) {
-    const proxy = (AppState.proxy.list || []).find(p => p.id === proxyId);
-    if (!proxy) return;
+    const proxy = proxies.find(p => p.id === proxyId);
+    if (!proxy) {
+        console.error('프록시를 찾을 수 없습니다:', proxyId);
+        return;
+    }
+
     AppState.proxy.editing = proxy;
     document.getElementById('modalTitle').textContent = '프록시 수정';
-    document.getElementById('proxyName').value = proxy.name;
-    document.getElementById('proxyHost').value = proxy.host;
-    document.getElementById('proxySshPort').value = proxy.ssh_port;
-    document.getElementById('proxySnmpPort').value = proxy.snmp_port || 161;
-    document.getElementById('proxySnmpVersion').value = proxy.snmp_version || 'v2c';
-    document.getElementById('proxySnmpCommunity').value = proxy.snmp_community || 'public';
-    document.getElementById('proxyUsername').value = proxy.username;
-    document.getElementById('proxyPassword').value = '';
-    document.getElementById('proxyDescription').value = proxy.description || '';
+
+    // 폼 필드 업데이트
+    const fields = {
+        'proxyName': proxy.name,
+        'proxyHost': proxy.host,
+        'proxySshPort': proxy.ssh_port,
+        'proxySnmpPort': proxy.snmp_port || 161,
+        'proxySnmpVersion': proxy.snmp_version || 'v2c',
+        'proxySnmpCommunity': proxy.snmp_community || 'public',
+        'proxyUsername': proxy.username,
+        'proxyPassword': '', // 보안상 비밀번호는 비워둠
+        'proxyDescription': proxy.description || '',
+        'proxyGroup': proxy.group_id || ''
+    };
+
+    // 텍스트 필드 업데이트
+    Object.entries(fields).forEach(([id, value]) => {
+        const element = document.getElementById(id);
+        if (element) {
+            element.value = value;
+        }
+    });
+
+    // 체크박스 업데이트
     document.getElementById('proxyIsActive').checked = !!proxy.is_active;
     document.getElementById('proxyIsMain').checked = !!proxy.is_main;
-    document.getElementById('proxyGroup').value = proxy.group_id || '';
+
     AppState.proxy.modal.show();
 }
 
@@ -1384,6 +1418,147 @@ function populateSessionProxySelect() {
         });
 }
 
+// 세션 브라우저 상태 관리
+const SessionBrowserState = {
+    currentView: 'initial', // 'initial', 'empty', 'loading', 'data'
+    
+    // 상태 변경 및 UI 업데이트
+    setView(view) {
+        this.currentView = view;
+        this.updateUI();
+    },
+    
+    // UI 업데이트
+    updateUI() {
+        // 모든 상태 관련 요소 숨기기
+        document.getElementById('sessionsInitialState').style.display = 'none';
+        document.getElementById('sessionsEmptyState').style.display = 'none';
+        document.getElementById('sessionsTableContainer').style.display = 'none';
+        document.getElementById('sessionLoadingStatus').style.display = 'none';
+        
+        // 현재 상태에 따른 UI 표시
+        switch (this.currentView) {
+            case 'initial':
+                document.getElementById('sessionsInitialState').style.display = 'block';
+                break;
+            case 'empty':
+                document.getElementById('sessionsEmptyState').style.display = 'block';
+                break;
+            case 'loading':
+                document.getElementById('sessionLoadingStatus').style.display = 'flex';
+                document.getElementById('sessionsTableContainer').style.display = 'block';
+                break;
+            case 'data':
+                document.getElementById('sessionsTableContainer').style.display = 'block';
+                break;
+        }
+    }
+};
+
+// 페이지 크기 업데이트
+function updatePageSize(size) {
+    const table = $('#sessionsTable').DataTable();
+    if (table) {
+        table.page.len(parseInt(size)).draw();
+    }
+}
+
+// 컬럼 설정 토글
+function toggleColumnSettings() {
+    const table = $('#sessionsTable').DataTable();
+    if (!table) return;
+
+    // 기존 colvis 메뉴가 있다면 제거
+    $('.dt-button-collection').remove();
+
+    // 컬럼 설정 메뉴 생성
+    const columns = table.columns().indexes().map(idx => {
+        const column = table.column(idx);
+        return {
+            extend: 'columnToggle',
+            columns: idx,
+            text: column.header().textContent.trim(),
+            className: column.visible() ? 'active' : ''
+        };
+    }).toArray();
+
+    // 컬럼 토글 버튼 생성
+    const buttons = new $.fn.dataTable.Buttons(table, {
+        buttons: [
+            {
+                extend: 'colvisRestore',
+                text: '<i class="fas fa-undo me-2"></i>기본값으로 복원',
+                className: 'mb-2 w-100 text-start'
+            },
+            ...columns
+        ]
+    });
+
+    // 메뉴 표시
+    const container = $(buttons.container());
+    container.addClass('dt-button-collection');
+    container.css({
+        position: 'absolute',
+        top: '100%',
+        left: '0',
+        zIndex: 1000,
+        padding: '0.5rem',
+        backgroundColor: '#fff',
+        border: '1px solid var(--border)',
+        borderRadius: '8px',
+        boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+        minWidth: '200px'
+    });
+
+    // 버튼 스타일링
+    container.find('.dt-button').addClass('btn btn-sm w-100 text-start mb-1');
+    
+    // 메뉴 위치 조정
+    const button = $('.sessions-table-controls .btn-outline-secondary').first();
+    const buttonPos = button.offset();
+    container.appendTo('body').css({
+        top: buttonPos.top + button.outerHeight() + 5,
+        left: buttonPos.left
+    });
+
+    // 외부 클릭 시 메뉴 닫기
+    $(document).one('click', function(e) {
+        if (!container.is(e.target) && container.has(e.target).length === 0) {
+            container.remove();
+        }
+    });
+}
+
+// 세션 데이터 내보내기
+function exportSessions(format) {
+    const table = $('#sessionsTable').DataTable();
+    if (!table) return;
+
+    const fileName = `sessions_${new Date().toISOString().slice(0,10)}`;
+    const exportOptions = {
+        columns: ':visible',
+        modifier: {
+            search: 'applied',
+            order: 'applied'
+        }
+    };
+
+    if (format === 'excel') {
+        table.buttons.exportData({
+            format: 'xlsx',
+            filename: fileName,
+            exportOptions: exportOptions
+        });
+    } else if (format === 'csv') {
+        table.buttons.exportData({
+            format: 'csv',
+            filename: fileName,
+            exportOptions: exportOptions
+        });
+    }
+}
+
+// 세션 데이터 로드
 async function loadSessions() {
     const select = document.getElementById('sessionProxySelect');
     const gsel = document.getElementById('sessionGroupSelect');
@@ -1393,8 +1568,11 @@ async function loadSessions() {
     try {
         // 그룹 또는 프록시를 선택한 경우에만 조회
         if (!proxyId && !AppState.session.groupId) {
-            return showNotification('그룹 또는 프록시를 선택하세요.', 'warning');
+            SessionBrowserState.setView('initial');
+            return;
         }
+
+        SessionBrowserState.setView('loading');
 
         // 기존 DataTable 제거
         const table = $('#sessionsTable').DataTable();
@@ -1403,7 +1581,7 @@ async function loadSessions() {
         }
 
         // DataTables 초기화
-        $('#sessionsTable').DataTable({
+        const sessionsTable = $('#sessionsTable').DataTable({
             serverSide: true,
             processing: true,
             ajax: {
@@ -1415,15 +1593,45 @@ async function loadSessions() {
             },
             columns: [
                 { title: 'ID', data: 0 },
-                                 { title: '프록시 이름', data: 1 },
-                { title: 'Client IP', data: 2 },
-                { title: 'Server IP', data: 3 },
-                { title: 'User', data: 4 },
-                                 { title: 'URL Host', data: 5, className: 'text-truncate', render: function(d){ return d || '-'; } },
-                { title: 'Category', data: 6 },
+                { 
+                    title: '프록시 이름', 
+                    data: 1,
+                    className: 'fw-medium'
+                },
+                { 
+                    title: 'Client IP', 
+                    data: 2,
+                    className: 'text-monospace'
+                },
+                { 
+                    title: 'Server IP', 
+                    data: 3,
+                    className: 'text-monospace'
+                },
+                { 
+                    title: 'User', 
+                    data: 4,
+                    className: 'text-primary'
+                },
+                { 
+                    title: 'URL Host', 
+                    data: 5, 
+                    className: 'text-truncate',
+                    render: function(d){ 
+                        return d ? `<span class="text-muted">${d}</span>` : '-'; 
+                    }
+                },
+                { 
+                    title: 'Category', 
+                    data: 6,
+                    render: function(data) {
+                        return data ? `<span class="badge bg-light text-dark">${data}</span>` : '-';
+                    }
+                },
                 { 
                     title: 'Bytes Sent',
                     data: 7,
+                    className: 'text-end',
                     render: function(data) {
                         return data ? formatBytes(data) : '-';
                     }
@@ -1431,6 +1639,7 @@ async function loadSessions() {
                 { 
                     title: 'Bytes Received',
                     data: 8,
+                    className: 'text-end',
                     render: function(data) {
                         return data ? formatBytes(data) : '-';
                     }
@@ -1438,6 +1647,7 @@ async function loadSessions() {
                 { 
                     title: 'Age',
                     data: 9,
+                    className: 'text-end',
                     render: function(data) {
                         return data ? formatDuration(data) : '-';
                     }
@@ -1445,63 +1655,104 @@ async function loadSessions() {
                 { 
                     title: 'Created At',
                     data: 10,
+                    className: 'text-end',
                     render: function(data) {
-                        return data ? new Date(data).toLocaleString() : '-';
+                        if (!data) return '-';
+                        const date = new Date(data);
+                        return `<span title="${date.toLocaleString()}">${formatRelativeTime(date)}</span>`;
                     }
                 }
             ],
             columnDefs: [
-                { targets: [0], visible: false, searchable: false }
+                { targets: [0], visible: false, searchable: false },
+                { targets: '_all', defaultContent: '-' }
             ],
             order: [[10, 'desc']], // 생성일시 기준 내림차순
             pageLength: Math.min(AppState.session.pagination.pageSize, 50),
-            dom: "<'row align-items-center mb-2'<'col-sm-12 col-md-4'l><'col-sm-12 col-md-4 text-center'B><'col-sm-12 col-md-4'f>>"+
-                 "<'row'<'col-sm-12'tr>>"+
-                 "<'row mt-2'<'col-sm-12 col-md-6'i><'col-sm-12 col-md-6 d-flex justify-content-end'p>>",
-            buttons: [
-                { extend: 'copy', className: 'btn btn-sm btn-light' },
-                { extend: 'excel', className: 'btn btn-sm btn-light' },
-                { extend: 'csv', className: 'btn btn-sm btn-light' },
-                { extend: 'colvis', text: '컬럼 설정', className: 'btn btn-sm btn-light' }
-            ],
+            dom: "<'row align-items-center mb-2'<'col-sm-12 col-md-6'l><'col-sm-12 col-md-6'f>>" +
+                 "<'row'<'col-sm-12'tr>>" +
+                 "<'row mt-2'<'col-sm-12 col-md-5'i><'col-sm-12 col-md-7'p>>" +
+                 "<'row mt-2'<'col-sm-12'B>>",
+            // 버튼 제거 (별도 구현)
+            buttons: [],
             language: {
-                processing: "처리 중...",
-                search: "검색:",
-                lengthMenu: "_MENU_ 개씩 보기",
-                info: "_START_ - _END_ / _TOTAL_",
+                processing: '<div class="loading-spinner"><i class="fas fa-spinner"></i> 처리 중...</div>',
+                search: '<i class="fas fa-search text-muted me-2"></i>',
+                lengthMenu: "페이지당 _MENU_ 개",
+                info: "총 _TOTAL_개 중 _START_ - _END_",
                 infoEmpty: "데이터 없음",
                 infoFiltered: "(_MAX_ 개의 데이터에서 필터링됨)",
-                infoPostFix: "",
-                loadingRecords: "로딩중...",
-                zeroRecords: "검색 결과가 없습니다",
-                emptyTable: "데이터가 없습니다",
+                emptyTable: '<div class="sessions-empty-state"><div class="icon"><i class="fas fa-database fa-3x"></i></div><h6 class="title">데이터가 없습니다</h6></div>',
+                zeroRecords: '<div class="sessions-empty-state"><div class="icon"><i class="fas fa-search fa-3x"></i></div><h6 class="title">검색 결과가 없습니다</h6></div>',
                 paginate: {
-                    first: "처음",
-                    previous: "이전",
-                    next: "다음",
-                    last: "마지막"
+                    first: '<i class="fas fa-angle-double-left"></i>',
+                    previous: '<i class="fas fa-angle-left"></i>',
+                    next: '<i class="fas fa-angle-right"></i>',
+                    last: '<i class="fas fa-angle-double-right"></i>'
                 }
             },
-            responsive: true
+            responsive: true,
+            drawCallback: function() {
+                // 테이블이 다시 그려질 때마다 상태 체크
+                const api = this.api();
+                const isEmpty = api.data().length === 0;
+            }
         });
 
         // 행 클릭 시 상세 보기
         $('#sessionsTable tbody').off('click').on('click', 'tr', async function() {
-            const table = $('#sessionsTable').DataTable();
-            const rowData = table.row(this).data();
+            const rowData = sessionsTable.row(this).data();
             if (!rowData) return;
+            
             const id = rowData[0];
             try {
+                // 로딩 상태 표시
+                document.getElementById('sessionLoadingStatus').style.display = 'flex';
+                
                 const res = await fetch(`/api/monitoring/sessions/detail/${id}`);
                 const json = await res.json();
+                
                 if (json && json.success) {
-                    showSessionDetailModal(json.data);
+                    const data = json.data;
+                    
+                    // 기본 정보
+                    document.getElementById('sessionBasicInfo').innerHTML = `
+                        <div class="mb-2"><strong>프록시:</strong> ${data.proxy_name}</div>
+                        <div class="mb-2"><strong>사용자:</strong> ${data.user || '-'}</div>
+                        <div><strong>카테고리:</strong> ${data.category || '-'}</div>
+                    `;
+                    
+                    // 연결 정보
+                    document.getElementById('sessionConnectionInfo').innerHTML = `
+                        <div class="mb-2"><strong>클라이언트 IP:</strong> ${data.client_ip}</div>
+                        <div class="mb-2"><strong>서버 IP:</strong> ${data.server_ip}</div>
+                        <div><strong>URL:</strong> ${data.url_host || '-'}</div>
+                    `;
+                    
+                    // 트래픽 정보
+                    document.getElementById('sessionTrafficInfo').innerHTML = `
+                        <div class="mb-2"><strong>전송된 바이트:</strong> ${formatBytes(data.bytes_sent)}</div>
+                        <div class="mb-2"><strong>수신된 바이트:</strong> ${formatBytes(data.bytes_received)}</div>
+                        <div><strong>세션 수명:</strong> ${formatDuration(data.age)}</div>
+                    `;
+                    
+                    // 추가 정보
+                    document.getElementById('sessionAdditionalInfo').innerHTML = `
+                        <div class="mb-2"><strong>생성 시간:</strong> ${new Date(data.created_at).toLocaleString()}</div>
+                        <div><strong>프로토콜:</strong> ${data.protocol || '-'}</div>
+                    `;
+                    
+                    const modal = new bootstrap.Modal(document.getElementById('sessionDetailModal'));
+                    modal.show();
                 } else {
                     showNotification('상세 정보를 불러오지 못했습니다.', 'danger');
                 }
             } catch (e) {
-                console.error(e);
+                console.error('세션 상세 조회 오류:', e);
                 showNotification('상세 조회 중 오류가 발생했습니다.', 'danger');
+            } finally {
+                // 로딩 상태 숨김
+                document.getElementById('sessionLoadingStatus').style.display = 'none';
             }
         });
 
@@ -1511,49 +1762,112 @@ async function loadSessions() {
     }
 }
 
+// 상대적 시간 포맷팅
+function formatRelativeTime(date) {
+    const now = new Date();
+    const diffInSeconds = Math.floor((now - date) / 1000);
+    
+    if (diffInSeconds < 60) return '방금 전';
+    if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)}분 전`;
+    if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)}시간 전`;
+    if (diffInSeconds < 604800) return `${Math.floor(diffInSeconds / 86400)}일 전`;
+    
+    return date.toLocaleDateString();
+}
+
 async function fetchSessionsFromSource() {
     const gsel = document.getElementById('sessionGroupSelect');
     const psel = document.getElementById('sessionProxySelect');
+    const fetchBtn = document.getElementById('fetchSessionsBtn');
+    const loadingStatus = document.getElementById('sessionLoadingStatus');
+    
     const groupId = gsel && gsel.value ? parseInt(gsel.value) : null;
     const proxyId = psel && psel.value ? parseInt(psel.value) : null;
+    
     if (!groupId && !proxyId) {
-        return showNotification('그룹 또는 프록시를 선택하세요.', 'warning');
+        showNotification('그룹을 선택해주세요.', 'warning');
+        return;
     }
+    
     try {
-        let ok = true;
+        // 버튼 로딩 상태 설정
+        const originalBtnHtml = fetchBtn.innerHTML;
+        fetchBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+        fetchBtn.disabled = true;
+        loadingStatus.style.display = 'flex';
+        
+        let success = false;
+        let message = '';
+        let response = null;
+        
         if (groupId) {
-            // 신 라우트 (그룹 수집)
-            const res = await fetch(`/api/monitoring/sessions/group/${groupId}?persist=1`);
-            const json = await res.json();
-            ok = json && json.success === true;
-            if (!ok) {
-                // 호환 라우트 시도
-                const res2 = await fetch(`/api/sessions?group_id=${groupId}&persist=1`);
-                const json2 = await res2.json();
-                ok = json2 && json2.success === true;
+            try {
+                // 신 라우트 시도 (그룹 수집)
+                response = await fetch(`/api/monitoring/sessions/group/${groupId}?persist=1`);
+                const result = await response.json();
+                
+                if (response.ok && result.success) {
+                    success = true;
+                    message = result.message || '세션을 성공적으로 수집했습니다.';
+                } else {
+                    // 호환 라우트 시도
+                    response = await fetch(`/api/sessions?group_id=${groupId}&persist=1`);
+                    const fallbackResult = await response.json();
+                    
+                    if (response.ok && fallbackResult.success) {
+                        success = true;
+                        message = fallbackResult.message || '세션을 성공적으로 수집했습니다.';
+                    } else {
+                        message = fallbackResult.message || '세션 수집에 실패했습니다.';
+                    }
+                }
+            } catch (error) {
+                console.error('그룹 세션 수집 오류:', error);
+                message = '서버 연결에 실패했습니다.';
             }
         } else if (proxyId) {
-            // 신 라우트 (프록시 수집)
-            const res = await fetch(`/api/monitoring/sessions/${proxyId}?persist=1`);
-            const json = await res.json();
-            ok = !(json && json.error);
-            if (!ok) {
-                // 호환 라우트 시도
-                const res2 = await fetch(`/api/sessions?proxy_id=${proxyId}&persist=1`);
-                const json2 = await res2.json();
-                ok = json2 && json2.success === true;
+            try {
+                // 신 라우트 시도 (프록시 수집)
+                response = await fetch(`/api/monitoring/sessions/${proxyId}?persist=1`);
+                const result = await response.json();
+                
+                if (response.ok && !result.error) {
+                    success = true;
+                    message = result.message || '세션을 성공적으로 수집했습니다.';
+                } else {
+                    // 호환 라우트 시도
+                    response = await fetch(`/api/sessions?proxy_id=${proxyId}&persist=1`);
+                    const fallbackResult = await response.json();
+                    
+                    if (response.ok && fallbackResult.success) {
+                        success = true;
+                        message = fallbackResult.message || '세션을 성공적으로 수집했습니다.';
+                    } else {
+                        message = fallbackResult.message || '세션 수집에 실패했습니다.';
+                    }
+                }
+            } catch (error) {
+                console.error('프록시 세션 수집 오류:', error);
+                message = '서버 연결에 실패했습니다.';
             }
         }
-        if (!ok) {
-            showNotification('세션 수집 실패', 'danger');
+        
+        // 결과에 따른 처리
+        if (success) {
+            showNotification(message, 'success');
+            await loadSessions();
         } else {
-            showNotification('세션을 수집했습니다.', 'success');
+            showNotification(message, 'danger');
         }
-        // 수집 후 테이블 새로 고침 (DB 기반)
-        loadSessions();
+        
     } catch (e) {
-        console.error(e);
+        console.error('세션 수집 중 오류:', e);
         showNotification('세션 수집 중 오류가 발생했습니다.', 'danger');
+    } finally {
+        // 버튼 상태 복원
+        fetchBtn.innerHTML = '<i class="fas fa-sync-alt"></i>';
+        fetchBtn.disabled = false;
+        loadingStatus.style.display = 'none';
     }
 }
 
