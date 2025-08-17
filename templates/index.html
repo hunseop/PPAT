@@ -25,35 +25,35 @@
     </style>
 </head>
 <body>
-    <div id="app">
-        <!-- 네비게이션 -->
-        <nav class="navbar navbar-expand-lg navbar-light bg-white border-bottom shadow-sm">
-            <div class="container">
-                <a class="navbar-brand fw-bold" href="#">
-                    PPAT
-                </a>
-                <div class="navbar-nav ms-auto">
-                    <a class="nav-link px-3" href="#resources" onclick="showTab('resources')">
-                        자원사용률
-                    </a>
-                    <a class="nav-link px-3" href="#sessions" onclick="showTab('sessions')">
-                        세션브라우저
-                    </a>
-                    <a class="nav-link px-3" href="#" onclick="alert('개발 예정')">
-                        정책조회
-                    </a>
-                    <a class="nav-link px-3" href="#management" onclick="showTab('management')">
-                        관리
-                    </a>
-                </div>
+    <div id="app" class="app-wrapper">
+        <!-- 사이드바 네비게이션 -->
+        <nav class="sidebar">
+            <div class="p-3">
+                <div class="fs-4 fw-bold mb-4">PPAT</div>
+                <ul class="nav nav-pills flex-column">
+                    <li class="nav-item">
+                        <a class="nav-link active" href="#management" onclick="showTab('management')">관리</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#resources" onclick="showTab('resources')">자원사용률</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#sessions" onclick="showTab('sessions')">세션브라우저</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#" onclick="alert('개발 예정')">정책조회</a>
+                    </li>
+                </ul>
             </div>
         </nav>
 
-        <!-- 토스트 알림 컨테이너 -->
-        <div class="toast-container"></div>
-
         <!-- 메인 컨텐츠 -->
-        <div class="container mt-4">
+        <main class="main-content flex-grow-1">
+            <!-- 토스트 알림 컨테이너 -->
+            <div class="toast-container"></div>
+
+            <!-- 탭 컨텐츠 -->
+            <div class="container-fluid">
             <!-- 관리 탭 -->
             <div id="managementTab">
                 <!-- 프록시 그룹 관리 섹션 -->
@@ -551,7 +551,8 @@
                     </div>
                 </div>
             </div>
-        </div>
+            </div><!-- container-fluid -->
+        </main>
     </div>
 
     <!-- 프록시 그룹 모달 -->

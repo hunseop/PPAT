@@ -28,6 +28,29 @@ body {
   line-height: 1.4;
 }
 
+/* Layout */
+.app-wrapper {
+  display: flex;
+  min-height: 100vh;
+}
+.sidebar {
+  width: 220px;
+  background: #fff;
+  border-right: 1px solid var(--border);
+}
+.sidebar .nav-link {
+  color: var(--muted);
+  border-radius: 6px;
+}
+.sidebar .nav-link.active {
+  background: var(--primary);
+  color: #fff;
+}
+.main-content {
+  padding: 1.5rem;
+  background: var(--bg);
+}
+
 /* Navbar - minimal, light */
 .navbar {
   background: #fff !important;
