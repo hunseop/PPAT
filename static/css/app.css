@@ -118,9 +118,73 @@ body {
 .modal-content { border-radius: 12px; border: 1px solid var(--border); }
 .modal-header, .modal-footer { border: none; }
 
+/* Toast Notifications */
+.toast-container {
+    position: fixed;
+    top: 1rem;
+    right: 1rem;
+    z-index: 1050;
+    max-width: 350px;
+}
+
+.toast {
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    margin-bottom: 0.75rem;
+    border: none;
+    opacity: 0;
+    transition: all 0.35s ease;
+}
+
+.toast.show {
+    opacity: 1;
+}
+
+.toast.success {
+    border-left: 4px solid var(--success);
+}
+
+.toast.danger {
+    border-left: 4px solid var(--danger);
+}
+
+.toast.warning {
+    border-left: 4px solid var(--warning);
+}
+
+.toast.info {
+    border-left: 4px solid var(--primary);
+}
+
+.toast-header {
+    background: transparent;
+    border: none;
+    padding: 0.75rem 0.75rem 0.25rem 0.75rem;
+}
+
+.toast-body {
+    padding: 0.25rem 0.75rem 0.75rem 0.75rem;
+    color: var(--text);
+}
+
+.toast-icon {
+    width: 20px;
+    height: 20px;
+    margin-right: 8px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.toast .btn-close {
+    font-size: 0.875rem;
+    padding: 0.5rem;
+    margin: -0.25rem -0.25rem -0.25rem auto;
+}
+
 /* Utilities */
 .text-muted { color: var(--muted) !important; }
-#notifications .alert { border-radius: 10px; border: 1px solid var(--border); box-shadow: var(--shadow-sm); }
 
 /* Resource summary cards */
 .card.text-center .card-title { font-size: 1.25rem; margin-bottom: 0.25rem; }

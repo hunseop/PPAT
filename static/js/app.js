@@ -1275,29 +1275,53 @@ const ValidationRules = {
     }
 };
 
-// 알림 표시 (PRD 기준: 미니멀 디자인)
+// 토스트 알림 표시
 function showNotification(message, type = 'info') {
-    const alertClass = type === 'success' ? 'alert-success' : 
-                      type === 'danger' ? 'alert-danger' : 
-                      type === 'warning' ? 'alert-warning' : 'alert-info';
+    const toastId = 'toast-' + Date.now();
+    const icon = getIconForType(type);
+    const title = type === 'success' ? '성공' :
+                 type === 'danger' ? '오류' :
+                 type === 'warning' ? '경고' : '알림';
     
-    const alertDiv = document.createElement('div');
-    alertDiv.className = `alert ${alertClass} alert-dismissible fade show`;
-    alertDiv.innerHTML = `
-        <i class="fas ${getIconForType(type)} me-2"></i>
-        ${message}
-        <button type="button" class="btn-close" onclick="this.parentElement.remove()"></button>
+    const toastHtml = `
+        <div id="${toastId}" class="toast ${type}" role="alert" aria-live="assertive" aria-atomic="true">
+            <div class="toast-header">
+                <div class="toast-icon">
+                    <i class="fas ${icon}"></i>
+                </div>
+                <strong class="me-auto">${title}</strong>
+                <small class="text-muted">방금 전</small>
+                <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+            </div>
+            <div class="toast-body">
+                ${message}
+            </div>
+        </div>
     `;
     
-    const notifications = document.getElementById('notifications');
-    notifications.appendChild(alertDiv);
+    const container = document.querySelector('.toast-container');
+    container.insertAdjacentHTML('beforeend', toastHtml);
     
-    // 5초 후 자동 제거
-    setTimeout(() => {
-        if (alertDiv.parentElement) {
-            alertDiv.remove();
-        }
-    }, 5000);
+    const toastElement = document.getElementById(toastId);
+    const toast = new bootstrap.Toast(toastElement, {
+        animation: true,
+        autohide: true,
+        delay: 5000
+    });
+    
+    // 토스트 표시
+    toast.show();
+    
+    // 애니메이션 완료 후 요소 제거
+    toastElement.addEventListener('hidden.bs.toast', () => {
+        setTimeout(() => toastElement.remove(), 500);
+    });
+    
+    // 최대 3개까지만 표시
+    const toasts = container.querySelectorAll('.toast');
+    if (toasts.length > 3) {
+        toasts[0].remove();
+    }
 }
 
 // 알림 타입별 아이콘
