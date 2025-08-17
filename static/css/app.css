@@ -125,6 +125,107 @@ body {
 /* Resource summary cards */
 .card.text-center .card-title { font-size: 1.25rem; margin-bottom: 0.25rem; }
 .card.text-center .card-text { margin: 0; }
+.card.text-center .card-body { padding: 1.25rem; }
+
+/* Resource monitoring controls */
+.monitoring-controls {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.monitoring-controls .btn-group {
+    display: inline-flex;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.monitoring-controls .btn-group .btn {
+    border-radius: 0;
+    padding: 0.375rem 0.75rem;
+}
+
+.monitoring-controls .btn-group .btn:first-child {
+    border-top-left-radius: 8px;
+    border-bottom-left-radius: 8px;
+}
+
+.monitoring-controls .btn-group .btn:last-child {
+    border-top-right-radius: 8px;
+    border-bottom-right-radius: 8px;
+}
+
+/* Interval selector */
+.interval-selector {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.interval-selector .interval-btn {
+    padding: 0.375rem 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: #fff;
+    color: var(--text);
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.interval-selector .interval-btn.active {
+    background: var(--primary);
+    color: #fff;
+    border-color: var(--primary);
+}
+
+/* Group selector enhancements */
+.group-selector {
+    position: relative;
+    width: 100%;
+}
+
+.group-selector select {
+    width: 100%;
+    padding-right: 2.5rem;
+}
+
+.group-selector .proxy-count {
+    position: absolute;
+    right: 2.5rem;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--muted);
+    font-size: 0.875rem;
+}
+
+/* Empty state messages */
+.empty-state {
+    text-align: center;
+    padding: 3rem 1rem;
+}
+
+.empty-state .icon {
+    margin-bottom: 1.5rem;
+    color: var(--muted);
+}
+
+.empty-state .title {
+    font-size: 1.125rem;
+    color: var(--text);
+    margin-bottom: 0.5rem;
+}
+
+.empty-state .description {
+    color: var(--muted);
+    margin-bottom: 1.5rem;
+}
+
+/* Table column widths */
+.resources-table th.col-proxy { width: 20%; }
+.resources-table th.col-group { width: 15%; }
+.resources-table th.col-role { width: 10%; }
+.resources-table th.col-metrics { width: 8%; }
+.resources-table th.col-status { width: 10%; }
+.resources-table th.col-update { width: 12%; }
 
 /* Sessions header controls */
 #sessionsTab .card-header .d-flex select { min-width: 220px; }

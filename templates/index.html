@@ -207,7 +207,9 @@
                         <div class="card text-center shadow-sm">
                             <div class="card-body">
                                 <h5 class="card-title text-secondary" id="resourcesGroupLabel">그룹 선택</h5>
-                                <select id="resourcesGroupSelect" class="form-select form-select-sm"></select>
+                                <div class="group-selector">
+                                    <select id="resourcesGroupSelect" class="form-select form-select-sm"></select>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -221,31 +223,47 @@
                                 <h6 class="mb-0 text-muted">모니터링 설정</h6>
                             </div>
                             <div class="card-body">
-                                <div class="row g-3 align-items-center">
-                                    <div class="col-md-3">
-                                        <label for="monitoringInterval" class="form-label small">갱신 주기 (초)</label>
-                                        <select class="form-select form-select-sm" id="monitoringInterval" onchange="MonitoringController.updateInterval(this.value)">
-                                            <option value="10">10초</option>
-                                            <option value="30" selected>30초</option>
-                                            <option value="60">1분</option>
-                                            <option value="300">5분</option>
-                                        </select>
-                                        <div class="mt-1">
+                                <div class="row g-4 align-items-center">
+                                    <div class="col-md-4">
+                                        <label class="form-label small mb-2">갱신 주기</label>
+                                        <div class="interval-selector">
+                                            <button class="interval-btn" data-value="10" onclick="MonitoringController.updateInterval(10)">10초</button>
+                                            <button class="interval-btn active" data-value="30" onclick="MonitoringController.updateInterval(30)">30초</button>
+                                            <button class="interval-btn" data-value="60" onclick="MonitoringController.updateInterval(60)">1분</button>
+                                            <button class="interval-btn" data-value="300" onclick="MonitoringController.updateInterval(300)">5분</button>
+                                        </div>
+                                        <div class="mt-2">
                                             <small class="text-muted">수집된 항목: <span class="badge bg-light text-dark" id="collectedItemsCount">8</span></small>
                                         </div>
                                     </div>
-                                    <div class="col-md-6">
-                                        <small class="text-muted">
-                                            마지막 업데이트: <span id="lastUpdate">-</span> | 
-                                            다음 업데이트: <span id="nextUpdate">-</span>
-                                        </small>
+                                    <div class="col-md-4">
+                                        <div class="d-flex flex-column gap-1">
+                                            <div class="d-flex align-items-center gap-2">
+                                                <i class="fas fa-history text-muted"></i>
+                                                <small class="text-muted">마지막 업데이트:</small>
+                                                <span id="lastUpdate" class="badge bg-light text-dark">정보 없음</span>
+                                            </div>
+                                            <div class="d-flex align-items-center gap-2">
+                                                <i class="fas fa-clock text-muted"></i>
+                                                <small class="text-muted">다음 업데이트:</small>
+                                                <span id="nextUpdate" class="badge bg-light text-dark">정보 없음</span>
+                                            </div>
+                                        </div>
                                     </div>
-                                    <div class="col-md-3 text-end">
-                                        <div class="d-inline-flex align-items-center gap-2">
-                                            <span class="badge" id="monitoringStatus">정지됨</span>
-                                            <button class="btn btn-sm btn-success" id="startMonitoringBtn" onclick="MonitoringController.startMonitoring()">시작</button>
-                                            <button class="btn btn-sm btn-danger" id="stopMonitoringBtn" onclick="MonitoringController.stopMonitoring()" disabled>중지</button>
-                                            <button class="btn btn-sm btn-outline-primary" id="manualRefreshBtn" onclick="refreshResources()" disabled>수동 새로고침</button>
+                                    <div class="col-md-4">
+                                        <div class="monitoring-controls">
+                                            <span class="badge bg-secondary" id="monitoringStatus">정지됨</span>
+                                            <div class="btn-group">
+                                                <button class="btn btn-success" id="startMonitoringBtn" onclick="MonitoringController.startMonitoring()">
+                                                    <i class="fas fa-play me-1"></i>시작
+                                                </button>
+                                                <button class="btn btn-danger" id="stopMonitoringBtn" onclick="MonitoringController.stopMonitoring()" disabled>
+                                                    <i class="fas fa-stop me-1"></i>중지
+                                                </button>
+                                            </div>
+                                            <button class="btn btn-outline-primary" id="manualRefreshBtn" onclick="refreshResources()" disabled>
+                                                <i class="fas fa-sync-alt me-1"></i>새로고침
+                                            </button>
                                         </div>
                                     </div>
                                 </div>
@@ -263,22 +281,22 @@
                             </div>
                             <div class="card-body p-0">
                                 <div class="table-responsive">
-                                    <table class="table table-hover table-sm mb-0">
+                                    <table class="table table-hover table-sm mb-0 resources-table">
                                         <thead class="table-light">
                                             <tr>
-                                                <th class="border-0 ps-3">프록시</th>
-                                                <th class="border-0">그룹</th>
-                                                <th class="border-0">역할</th>
-                                                <th class="border-0">CPU</th>
-                                                <th class="border-0">메모리</th>
-                                                <th class="border-0">고유클라이언트</th>
-                                                <th class="border-0">CC</th>
-                                                <th class="border-0">CS</th>
-                                                <th class="border-0">HTTP</th>
-                                                <th class="border-0">HTTPS</th>
-                                                <th class="border-0">FTP</th>
-                                                <th class="border-0">상태</th>
-                                                <th class="border-0">업데이트</th>
+                                                <th class="border-0 ps-3 col-proxy">프록시</th>
+                                                <th class="border-0 col-group">그룹</th>
+                                                <th class="border-0 col-role">역할</th>
+                                                <th class="border-0 col-metrics">CPU</th>
+                                                <th class="border-0 col-metrics">메모리</th>
+                                                <th class="border-0 col-metrics">고유클라이언트</th>
+                                                <th class="border-0 col-metrics">CC</th>
+                                                <th class="border-0 col-metrics">CS</th>
+                                                <th class="border-0 col-metrics">HTTP</th>
+                                                <th class="border-0 col-metrics">HTTPS</th>
+                                                <th class="border-0 col-metrics">FTP</th>
+                                                <th class="border-0 col-status">상태</th>
+                                                <th class="border-0 col-update">업데이트</th>
                                             </tr>
                                         </thead>
                                         <tbody id="resourcesTableBody">
@@ -288,14 +306,15 @@
                                 </div>
 
                                 <!-- 빈 상태 메시지 -->
-                                <div id="resourcesEmptyMessage" class="text-center py-5" style="display: none;">
-                                    <div class="text-muted mb-3">
-                                        <svg width="48" height="48" viewBox="0 0 24 24" fill="currentColor">
-                                            <path d="M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M7,13H17V11H7"/>
-                                        </svg>
+                                <div id="resourcesEmptyMessage" class="empty-state" style="display: none;">
+                                    <div class="icon">
+                                        <i class="fas fa-server fa-3x"></i>
                                     </div>
-                                    <h6 class="text-muted">활성화된 프록시가 없습니다</h6>
-                                    <p class="text-muted small">프록시를 활성화하여 모니터링을 시작하세요.</p>
+                                    <h6 class="title">표시할 프록시가 없습니다</h6>
+                                    <p class="description">현재 수집된 데이터가 없거나 선택된 그룹에 활성화된 프록시가 없습니다.</p>
+                                    <button class="btn btn-primary" onclick="MonitoringController.startMonitoring()">
+                                        <i class="fas fa-play me-1"></i>모니터링 시작
+                                    </button>
                                 </div>
                             </div>
                         </div>

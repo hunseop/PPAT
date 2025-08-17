@@ -283,20 +283,40 @@ async function initGroupSelectors() {
         const res = await fetch('/api/groups');
         if (!res.ok) return;
         const data = await res.json();
+        
         // 자원 탭 그룹
         const resSel = document.getElementById('resourcesGroupSelect');
         if (resSel) {
-            resSel.innerHTML = '<option value="">전체 그룹</option>' + data.map(g => `<option value="${g.id}">${g.name}</option>`).join('');
-            resSel.onchange = () => { AppState.session.resourcesGroupId = resSel.value ? parseInt(resSel.value) : null; if (AppState.monitoring.isActive) { loadResourcesData(); } };
+            resSel.innerHTML = '<option value="">전체 그룹</option>' + 
+                data.map(g => `<option value="${g.id}">${g.name} (${g.proxy_count || 0})</option>`).join('');
+            
+            // 선택된 그룹 강조를 위한 스타일 적용
+            resSel.addEventListener('change', (e) => {
+                AppState.session.resourcesGroupId = e.target.value ? parseInt(e.target.value) : null;
+                
+                // 선택된 그룹 강조
+                const selectedOption = e.target.options[e.target.selectedIndex];
+                document.getElementById('resourcesGroupLabel').textContent = 
+                    e.target.value ? selectedOption.text : '그룹 선택';
+                
+                if (AppState.monitoring.isActive) {
+                    loadResourcesData();
+                }
+            });
         }
+        
         // 세션 탭 그룹
         const sesSel = document.getElementById('sessionGroupSelect');
         if (sesSel) {
-            sesSel.innerHTML = '<option value="">그룹 선택</option>' + data.map(g => `<option value="${g.id}">${g.name}</option>`).join('');
-            sesSel.onchange = () => { sessionsGroupId = sesSel.value ? parseInt(sesSel.value) : null; };
+            sesSel.innerHTML = '<option value="">그룹 선택</option>' + 
+                data.map(g => `<option value="${g.id}">${g.name} (${g.proxy_count || 0})</option>`).join('');
+            sesSel.onchange = () => { 
+                sessionsGroupId = sesSel.value ? parseInt(sesSel.value) : null;
+            };
         }
     } catch(e) {
         console.error('그룹 셀렉트 초기화 실패', e);
+        showNotification('그룹 목록을 불러오는데 실패했습니다.', 'danger');
     }
 }
 
@@ -1002,8 +1022,13 @@ function getMemoryClass(memory) {
 // 마지막 업데이트 시간 갱신
 function updateLastUpdate() {
     const now = new Date();
-    const timeString = now.toLocaleTimeString('ko-KR');
-    document.getElementById('lastUpdate').textContent = timeString;
+    const timeString = now.toLocaleTimeString('ko-KR', {
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false
+    });
+    document.getElementById('lastUpdate').textContent = timeString || '정보 없음';
 }
 
 // 자원사용률 새로고침
@@ -1082,6 +1107,14 @@ const MonitoringController = {
         AppState.monitoring.intervalTime = parseInt(newInterval);
         
         console.log(`모니터링 주기 변경: ${AppState.monitoring.intervalTime}초`);
+        
+        // 주기 버튼 UI 업데이트
+        document.querySelectorAll('.interval-btn').forEach(btn => {
+            btn.classList.remove('active');
+            if (parseInt(btn.dataset.value) === AppState.monitoring.intervalTime) {
+                btn.classList.add('active');
+            }
+        });
         
         // 모니터링이 활성 상태라면 재시작
         if (AppState.monitoring.isActive) {
