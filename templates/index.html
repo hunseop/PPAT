@@ -27,8 +27,8 @@
 <body>
     <div id="app" class="app-wrapper">
         <!-- Top Navigation -->
-        <nav class="navbar navbar-expand-lg navbar-light">
-            <div class="container-fluid">
+        <nav class="navbar navbar-expand-lg navbar-light sticky-top">
+            <div class="container-xxl">
                 <a class="navbar-brand" href="#">PPAT</a>
                 <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav"                        aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
                     <span class="navbar-toggler-icon"></span>
@@ -54,13 +54,11 @@
 
         <!-- 메인 컨텐츠 -->
         <main class="main-content">
-            <!-- 토스트 알림 컨테이너 -->
             <div class="toast-container"></div>
 
-            <!-- 탭 컨텐츠 -->
-            <div class="container-fluid">
+            <div class="container-xxl">
             <!-- 관리 탭 -->
-            <div id="managementTab">
+            <section id="managementTab" class="section">
                 <!-- 프록시 그룹 관리 섹션 -->
                 <div class="row mb-4">
                     <div class="col-12">
@@ -178,10 +176,10 @@
                         </div>
                     </div>
                 </div>
-            </div>
+            </section>
 
             <!-- 자원사용률 탭 -->
-            <div id="resourcesTab" style="display: none;">
+            <section id="resourcesTab" class="section" style="display: none;">
                 <!-- 요약 통계 -->
                 <div class="row mb-4">
                     <div class="col-md-3">
@@ -325,10 +323,10 @@
                         </div>
                     </div>
                 </div>
-            </div>
+            </section>
 
             <!-- 세션브라우저 탭 -->
-            <div id="sessionsTab" style="display: none;">
+            <section id="sessionsTab" class="section" style="display: none;">
                 <div class="row mb-3">
                     <div class="col-12">
                         <div class="card shadow-sm">
@@ -454,7 +452,7 @@
                             </div>
                         </div>
                     </div>
-                </div>
+                </section>
 
                 <!-- 세션 상세 모달 -->
                 <div class="modal fade" id="sessionDetailModal" tabindex="-1" aria-labelledby="sessionDetailModalLabel" aria-hidden="true">
@@ -556,7 +554,7 @@
                     </div>
                 </div>
             </div>
-            </div><!-- container-fluid -->
+            </div><!-- container-xxl -->
         </main>
     </div>
 
@@ -725,5 +723,12 @@
     
     <!-- 애플리케이션 스크립트 -->
     <script src="/static/js/app.js"></script>
+    <script>
+      document.addEventListener('scroll', () => {
+        const nav = document.querySelector('.navbar');
+        if (window.scrollY > 10) nav.classList.add('scrolled');
+        else nav.classList.remove('scrolled');
+      });
+    </script>
 </body>
 </html>
