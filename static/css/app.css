@@ -30,24 +30,14 @@ body {
 
 /* Layout */
 .app-wrapper {
-  display: flex;
   min-height: 100vh;
-}
-.sidebar {
-  width: 220px;
-  background: #fff;
-  border-right: 1px solid var(--border);
-}
-.sidebar .nav-link {
-  color: var(--muted);
-  border-radius: 6px;
-}
-.sidebar .nav-link.active {
-  background: var(--primary);
-  color: #fff;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
 }
 .main-content {
-  padding: 1.5rem;
+  flex: 1;
+  padding: 2rem 1rem;
   background: var(--bg);
 }
 
