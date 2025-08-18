@@ -1430,26 +1430,29 @@ const SessionBrowserState = {
     
     // UI 업데이트
     updateUI() {
-        // 모든 상태 관련 요소 숨기기
-        document.getElementById('sessionsInitialState').style.display = 'none';
-        document.getElementById('sessionsEmptyState').style.display = 'none';
-        document.getElementById('sessionsTableContainer').style.display = 'none';
-        document.getElementById('sessionLoadingStatus').style.display = 'none';
-        
-        // 현재 상태에 따른 UI 표시
+        const initialEl = document.getElementById('sessionsInitialState');
+        const emptyEl = document.getElementById('sessionsEmptyState');
+        const tableEl = document.getElementById('sessionsTableContainer');
+        const loadingEl = document.getElementById('sessionLoadingStatus');
+
+        if (initialEl) initialEl.style.display = 'none';
+        if (emptyEl) emptyEl.style.display = 'none';
+        if (tableEl) tableEl.style.display = 'none';
+        if (loadingEl) loadingEl.style.display = 'none';
+
         switch (this.currentView) {
             case 'initial':
-                document.getElementById('sessionsInitialState').style.display = 'block';
+                if (initialEl) initialEl.style.display = 'block';
                 break;
             case 'empty':
-                document.getElementById('sessionsEmptyState').style.display = 'block';
+                if (emptyEl) emptyEl.style.display = 'block';
                 break;
             case 'loading':
-                document.getElementById('sessionLoadingStatus').style.display = 'flex';
-                document.getElementById('sessionsTableContainer').style.display = 'block';
+                if (loadingEl) loadingEl.style.display = 'flex';
+                if (tableEl) tableEl.style.display = 'block';
                 break;
             case 'data':
-                document.getElementById('sessionsTableContainer').style.display = 'block';
+                if (tableEl) tableEl.style.display = 'block';
                 break;
         }
     }
