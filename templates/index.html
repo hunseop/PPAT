@@ -387,7 +387,16 @@
                                     <h6 class="title">세션 정보를 조회하려면</h6>
                                     <p class="description">프록시 그룹을 선택하고 '세션 가져오기' 버튼을 클릭하세요.</p>
                                 </div>
-                                
+
+                                <!-- 빈 데이터 상태 -->
+                                <div id="sessionsEmptyState" class="sessions-empty-state" style="display: none;">
+                                    <div class="icon">
+                                        <i class="fas fa-database fa-3x"></i>
+                                    </div>
+                                    <h6 class="title">표시할 세션이 없습니다</h6>
+                                    <p class="description">다른 조건으로 다시 시도해 주세요.</p>
+                                </div>
+
                                 <!-- 세션 테이블 -->
                                 <div id="sessionsTableContainer" class="table-responsive" style="display: none;">
                                     <div class="sessions-table-controls p-3 border-bottom">
